@@ -10,8 +10,10 @@ const playlistContainer = document.getElementById('playlist');
 const serverInput = document.getElementById('serverUrl');
 const progressInput = document.getElementById('progress');
 const volumeInput = document.getElementById('volume');
+const downloadAppBtn = document.getElementById('downloadApp');
 
 const REQUEST_TIMEOUT = 5000;
+const APP_DOWNLOAD_URL = 'https://github.com/mihael-lovrencic/ChromecastUltimate/releases';
 
 function validateServerUrl(url) {
   if (!url || typeof url !== 'string') return false;
@@ -40,6 +42,11 @@ async function fetchWithTimeout(url, options = {}, timeout = REQUEST_TIMEOUT) {
 
 function setStatus(msg) {
   statusEl.textContent = msg;
+}
+
+function setDownloadVisible(visible) {
+  if (!downloadAppBtn) return;
+  downloadAppBtn.style.display = visible ? 'block' : 'none';
 }
 
 function updateServerUrl(url) {
@@ -138,6 +145,7 @@ async function loadDevices() {
     const res = await fetchWithTimeout(`${serverUrl}/devices`, {}, 10000);
     const devices = await res.json();
     devicesSelect.innerHTML = '';
+    setDownloadVisible(false);
     if (devices.length === 0) {
       const opt = document.createElement('option');
       opt.value = '';
@@ -156,6 +164,7 @@ async function loadDevices() {
   } catch (e) {
     setStatus('Server not running. Start the server in the Android app.');
     devicesSelect.innerHTML = '<option value="">Server not connected</option>';
+    setDownloadVisible(true);
   }
 }
 
@@ -164,6 +173,7 @@ async function refreshStatus() {
   try {
     const res = await fetchWithTimeout(`${serverUrl}/status`, {}, 5000);
     const status = await res.json();
+    setDownloadVisible(false);
 
     if (typeof status.volume === 'number' && volumeInput) {
       volumeInput.value = Math.round(status.volume * 100);
@@ -180,6 +190,7 @@ async function refreshStatus() {
     }
   } catch (e) {
     // Ignore status errors; server might not be running yet.
+    setDownloadVisible(true);
   }
 }
 
@@ -367,6 +378,11 @@ if (serverUrlInput) {
 }
 
 document.getElementById('discoverServer').onclick = discoverServer;
+if (downloadAppBtn) {
+  downloadAppBtn.onclick = () => {
+    browser.tabs.create({ url: APP_DOWNLOAD_URL });
+  };
+}
 
 loadDevices();
 setTimeout(loadVideos, 500);

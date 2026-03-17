@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -28,7 +28,8 @@
 
   <label>Server URL (Android device IP):</label>
   <input type="text" id="serverUrl" placeholder="http://192.168.1.100:5000">
-  <button id="discoverServer" style="background:#34a853;">🔍 Auto Discover</button>
+  <button id="discoverServer" style="background:#34a853;">ðŸ” Auto Discover</button>
+  <button id="downloadApp" style="background:#fbbc04; display:none; margin-top:6px;">Download Android App</button>
 
   <label>Device:</label>
   <select id="devices"><option value="">Loading devices...</option></select>
@@ -41,9 +42,9 @@
 
   <hr>
 
-  <button onclick="control('play')">▶ Play</button>
-  <button onclick="control('pause')">⏸ Pause</button>
-  <button onclick="control('stop')">⏹ Stop</button>
+  <button onclick="control('play')">â–¶ Play</button>
+  <button onclick="control('pause')">â¸ Pause</button>
+  <button onclick="control('stop')">â¹ Stop</button>
 
   <label>Seek:</label>
   <input type="range" id="progress" min="0" max="100" value="0">
