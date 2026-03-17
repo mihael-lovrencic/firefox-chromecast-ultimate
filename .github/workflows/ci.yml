@@ -44,3 +44,9 @@ jobs:
         run: npx web-ext build
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-ext-artifacts
+          path: web-ext-artifacts/
