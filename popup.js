@@ -12,6 +12,7 @@ const serverInput = document.getElementById('serverUrl');
 const progressInput = document.getElementById('progress');
 const volumeInput = document.getElementById('volume');
 const downloadAppBtn = document.getElementById('downloadApp');
+const useLocalhostBtn = document.getElementById('useLocalhost');
 
 const REQUEST_TIMEOUT = 5000;
 const APP_DOWNLOAD_URL = 'https://github.com/mihael-lovrencic/ChromecastUltimate/releases';
@@ -28,9 +29,12 @@ function validateServerUrl(url) {
   if (!url || typeof url !== 'string') return false;
   try {
     const parsed = new URL(url);
-    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && 
-           (parsed.hostname.match(/^(\d{1,3}\.){3}\d{1,3}$/) || 
-            parsed.hostname.match(/^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[0-1])/));
+    const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    const isPrivateIp =
+      parsed.hostname.match(/^(\d{1,3}\.){3}\d{1,3}$/) ||
+      parsed.hostname.match(/^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[0-1])/);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+           (isLocalhost || isPrivateIp);
   } catch {
     return false;
   }
@@ -111,11 +115,11 @@ async function discoverServer() {
       setStatus(`Found server at ${services[0].addresses[0]}`);
       loadDevices();
     } else {
-      setStatus('No server found. Enter IP manually.');
+      setStatus('No server found. Enter IP manually (e.g. http://192.168.x.x:5000 or http://127.0.0.1:5000).');
     }
   } catch (e) {
     console.error('Discovery error:', e);
-    setStatus('Discovery failed. Enter IP manually.');
+    setStatus('Discovery failed. Enter IP manually (e.g. http://192.168.x.x:5000 or http://127.0.0.1:5000).');
   }
 }
 
@@ -428,6 +432,13 @@ document.getElementById('discoverServer').onclick = discoverServer;
 if (downloadAppBtn) {
   downloadAppBtn.onclick = () => {
     browser.tabs.create({ url: APP_DOWNLOAD_URL });
+  };
+}
+if (useLocalhostBtn) {
+  useLocalhostBtn.onclick = () => {
+    const localUrl = 'http://127.0.0.1:5000';
+    if (serverInput) serverInput.value = localUrl;
+    updateServerUrl(localUrl);
   };
 }
 devicesSelect.addEventListener('change', () => {
