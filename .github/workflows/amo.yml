@@ -16,7 +16,7 @@ jobs:
           node-version: '20'
 
       - name: Install web-ext
-        run: npm install -g web-ext
+        run: npm install -g web-ext@latest
 
       - name: Build extension
         run: npx web-ext build
