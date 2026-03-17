@@ -1,0 +1,39 @@
+name: Submit to AMO
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  amo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install web-ext
+        run: npm install -g web-ext
+
+      - name: Build extension
+        run: npx web-ext build
+
+      - name: Find built file
+        run: |
+          ZIP_FILE=$(ls web-ext-artifacts/*.zip)
+          cp "$ZIP_FILE" "chromecast-ultimate.xpi"
+
+      - name: Submit to AMO
+        run: |
+          npx web-ext sign \
+            --use-submission-api \
+            --channel listed \
+            --api-key ${{ secrets.AMO_JWT_ISSUER }} \
+            --api-secret ${{ secrets.AMO_JWT_SECRET }} \
+            --xpi-path chromecast-ultimate.xpi
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}

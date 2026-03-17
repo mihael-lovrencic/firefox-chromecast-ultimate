@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Smart Chromecast Sender ULTIMATE",
-  "version": "6.0",
-  "description": "Full-feature Chromecast casting, tab mirroring, subtitles, playlists, and advanced controls",
-  "id": "smart-chromecast-ultimate@firefox",
+  "name": "Chromecast Ultimate",
+  "version": "1.0.0",
+  "description": "Cast videos and mirror tabs to Chromecast devices directly from Firefox",
+  "id": "chromecast-ultimate@firefox",
   "permissions": ["activeTab", "tabs", "scripting"],
   "action": {
     "default_popup": "popup.html",
@@ -22,7 +22,7 @@
   ],
   "browser_specific_settings": {
     "gecko": {
-      "id": "smart-chromecast-ultimate@firefox",
+      "id": "chromecast-ultimate@firefox",
       "strict_compatibility": false,
       "android_min_version": "128"
     }
