@@ -14,6 +14,12 @@ const downloadAppBtn = document.getElementById('downloadApp');
 
 const REQUEST_TIMEOUT = 5000;
 const APP_DOWNLOAD_URL = 'https://github.com/mihael-lovrencic/ChromecastUltimate/releases';
+const STATUS_POLL_INTERVAL = 4000;
+const STATUS_FAILS_BEFORE_DOWNLOAD = 2;
+
+let statusPollTimer = null;
+let statusInFlight = false;
+let statusFailCount = 0;
 
 function validateServerUrl(url) {
   if (!url || typeof url !== 'string') return false;
@@ -47,6 +53,18 @@ function setStatus(msg) {
 function setDownloadVisible(visible) {
   if (!downloadAppBtn) return;
   downloadAppBtn.style.display = visible ? 'block' : 'none';
+}
+
+function bumpStatusFail() {
+  statusFailCount += 1;
+  if (statusFailCount >= STATUS_FAILS_BEFORE_DOWNLOAD) {
+    setDownloadVisible(true);
+  }
+}
+
+function resetStatusFail() {
+  statusFailCount = 0;
+  setDownloadVisible(false);
 }
 
 function updateServerUrl(url) {
@@ -145,7 +163,7 @@ async function loadDevices() {
     const res = await fetchWithTimeout(`${serverUrl}/devices`, {}, 10000);
     const devices = await res.json();
     devicesSelect.innerHTML = '';
-    setDownloadVisible(false);
+    resetStatusFail();
     if (devices.length === 0) {
       const opt = document.createElement('option');
       opt.value = '';
@@ -164,16 +182,18 @@ async function loadDevices() {
   } catch (e) {
     setStatus('Server not running. Start the server in the Android app.');
     devicesSelect.innerHTML = '<option value="">Server not connected</option>';
-    setDownloadVisible(true);
+    bumpStatusFail();
   }
 }
 
 async function refreshStatus() {
   if (!serverUrl || !validateServerUrl(serverUrl)) return;
+  if (statusInFlight) return;
+  statusInFlight = true;
   try {
     const res = await fetchWithTimeout(`${serverUrl}/status`, {}, 5000);
     const status = await res.json();
-    setDownloadVisible(false);
+    resetStatusFail();
 
     if (typeof status.volume === 'number' && volumeInput) {
       volumeInput.value = Math.round(status.volume * 100);
@@ -190,7 +210,9 @@ async function refreshStatus() {
     }
   } catch (e) {
     // Ignore status errors; server might not be running yet.
-    setDownloadVisible(true);
+    bumpStatusFail();
+  } finally {
+    statusInFlight = false;
   }
 }
 
@@ -386,4 +408,5 @@ if (downloadAppBtn) {
 
 loadDevices();
 setTimeout(loadVideos, 500);
-setInterval(refreshStatus, 2000);
+if (statusPollTimer) clearInterval(statusPollTimer);
+statusPollTimer = setInterval(refreshStatus, STATUS_POLL_INTERVAL);
