@@ -21,19 +21,12 @@ jobs:
       - name: Build extension
         run: npx web-ext build
 
-      - name: Find built file
-        run: |
-          ZIP_FILE=$(ls web-ext-artifacts/*.zip)
-          cp "$ZIP_FILE" "chromecast-ultimate.xpi"
-
       - name: Submit to AMO
         run: |
           npx web-ext sign \
-            --use-submission-api \
             --channel listed \
-            --api-key ${{ secrets.AMO_JWT_ISSUER }} \
-            --api-secret ${{ secrets.AMO_JWT_SECRET }} \
-            --xpi-path chromecast-ultimate.xpi
+            --api-key "${{ secrets.AMO_JWT_ISSUER }}" \
+            --api-secret "${{ secrets.AMO_JWT_SECRET }}"
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
