@@ -60,8 +60,20 @@ The extension communicates with the Android app's HTTP server (port 5000):
 
 1. Start the ChromecastUltimate Android app and enable the server
 2. Open the Firefox extension popup
-3. Select your Chromecast device from the dropdown
-4. Cast videos or mirror tabs
+3. Enter your Android device's IP address in the "Server URL" field (e.g., `http://192.168.1.100:5000`)
+4. Click "Scan for Devices" to discover Chromecast devices
+5. Select your Chromecast device from the dropdown
+6. Cast videos or mirror tabs
+
+### Android Firefox
+
+The extension works on Firefox for Android (version 128+):
+
+1. Install the `.xpi` file same as desktop
+2. In the extension popup, enter your Android device's IP (where ChromecastUltimate app is running)
+3. On Android, the ChromecastUltimate app acts as the server
+
+**Note**: On Android, Firefox may open the popup in full-screen. Tap the extension icon in the address bar to access controls.
 
 ## Permissions
 

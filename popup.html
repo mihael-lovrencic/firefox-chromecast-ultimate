@@ -19,11 +19,15 @@
     .video-btn { background: #34a853; }
     .video-btn:hover { background: #2d8f47; }
     input[type="file"] { font-size: 11px; }
+    input[type="text"] { font-size: 12px; padding: 6px; }
   </style>
 </head>
 <body>
   <h3>Chromecast ULTIMATE</h3>
   <div id="status" class="status">Connecting to server...</div>
+
+  <label>Server URL (Android device IP):</label>
+  <input type="text" id="serverUrl" placeholder="http://192.168.1.100:5000" value="http://localhost:5000">
 
   <label>Device:</label>
   <select id="devices"><option value="">Loading devices...</option></select>

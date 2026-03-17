@@ -1,14 +1,23 @@
 let currentSession = null;
 let playlist = [];
-let serverUrl = 'http://localhost:5000';
+let serverUrl = localStorage.getItem('serverUrl') || 'http://localhost:5000';
 
 const statusEl = document.getElementById('status');
 const devicesSelect = document.getElementById('devices');
 const videosContainer = document.getElementById('videos');
 const playlistContainer = document.getElementById('playlist');
+const serverInput = document.getElementById('serverUrl');
+
+if (serverInput) serverInput.value = serverUrl;
 
 function setStatus(msg) {
   statusEl.textContent = msg;
+}
+
+function updateServerUrl(url) {
+  serverUrl = url;
+  localStorage.setItem('serverUrl', url);
+  loadDevices();
 }
 
 async function loadDevices() {
@@ -184,6 +193,11 @@ document.getElementById('scanVideos').onclick = loadVideos;
 document.getElementById('progress').oninput = (e) => setSeek(e.target.value);
 document.getElementById('volume').oninput = (e) => setVolume(e.target.value);
 document.getElementById('subtitle').onchange = (e) => addSubtitle(e.target.files[0]);
+
+const serverUrlInput = document.getElementById('serverUrl');
+if (serverUrlInput) {
+  serverUrlInput.addEventListener('change', (e) => updateServerUrl(e.target.value));
+}
 
 loadDevices();
 setTimeout(loadVideos, 500);

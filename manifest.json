@@ -18,7 +18,8 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "smart-chromecast-ultimate@firefox",
-      "strict_compatibility": false
+      "strict_compatibility": false,
+      "android_min_version": "128"
     }
   }
 }
