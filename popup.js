@@ -4,6 +4,7 @@ let serverUrl = localStorage.getItem('serverUrl') || '';
 let discoveredServerUrl = '';
 
 const statusEl = document.getElementById('status');
+const lastSeenEl = document.getElementById('lastSeen');
 const devicesSelect = document.getElementById('devices');
 const videosContainer = document.getElementById('videos');
 const playlistContainer = document.getElementById('playlist');
@@ -20,6 +21,7 @@ const STATUS_FAILS_BEFORE_DOWNLOAD = 2;
 let statusPollTimer = null;
 let statusInFlight = false;
 let statusFailCount = 0;
+let lastSeenAt = 0;
 
 function validateServerUrl(url) {
   if (!url || typeof url !== 'string') return false;
@@ -50,6 +52,18 @@ function setStatus(msg) {
   statusEl.textContent = msg;
 }
 
+function updateLastSeen(ts) {
+  if (!lastSeenEl) return;
+  if (!ts) {
+    lastSeenEl.style.display = 'none';
+    return;
+  }
+  const agoSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  const text = agoSec < 60 ? `${agoSec}s ago` : `${Math.floor(agoSec / 60)}m ago`;
+  lastSeenEl.textContent = `Last seen: ${text}`;
+  lastSeenEl.style.display = 'block';
+}
+
 function setDownloadVisible(visible) {
   if (!downloadAppBtn) return;
   downloadAppBtn.style.display = visible ? 'block' : 'none';
@@ -65,6 +79,8 @@ function bumpStatusFail() {
 function resetStatusFail() {
   statusFailCount = 0;
   setDownloadVisible(false);
+  lastSeenAt = Date.now();
+  updateLastSeen(lastSeenAt);
 }
 
 function updateServerUrl(url) {
@@ -211,6 +227,7 @@ async function refreshStatus() {
   } catch (e) {
     // Ignore status errors; server might not be running yet.
     bumpStatusFail();
+    updateLastSeen(lastSeenAt);
   } finally {
     statusInFlight = false;
   }

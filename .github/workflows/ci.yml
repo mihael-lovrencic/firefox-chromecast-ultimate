@@ -57,3 +57,4 @@ jobs:
         with:
           name: web-ext-${{ github.run_number }}-${{ env.SHORT_SHA }}
           path: web-ext-artifacts/
+          retention-days: 7
