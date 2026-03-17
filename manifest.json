@@ -26,7 +26,7 @@
       "id": "chromecast-ultimate@firefox",
       "strict_compatibility": false,
       "android_min_version": "128",
-      "data_collection_permissions": []
+      "data_collection_permissions": {}
     }
   }
 }
