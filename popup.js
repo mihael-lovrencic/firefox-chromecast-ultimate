@@ -306,17 +306,24 @@ async function setVolume(value) {
 }
 
 async function addSubtitle(file) {
-  setStatus('Subtitles not supported by Android app');
-  return;
   if (!file || !serverUrl || !validateServerUrl(serverUrl)) return;
   try {
     const data = await file.text();
-    await fetchWithTimeout(`${serverUrl}/subtitle`, {
+    const name = file.name || 'subtitle';
+    const lower = name.toLowerCase();
+    const format = lower.endsWith('.vtt') ? 'vtt' : lower.endsWith('.srt') ? 'srt' : 'vtt';
+    const res = await fetchWithTimeout(`${serverUrl}/subtitle`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: data })
+      body: JSON.stringify({ content: data, filename: name, format })
     });
-    setStatus('Subtitle loaded: ' + file.name);
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || result.success === false) {
+      setStatus(result.error || 'Subtitle error');
+      return;
+    }
+    setStatus((result.message || 'Subtitle applied') + ': ' + name);
+    refreshStatus();
   } catch (e) {
     setStatus('Subtitle error: ' + e.message);
   }
