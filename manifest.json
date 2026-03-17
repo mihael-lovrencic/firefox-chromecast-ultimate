@@ -25,10 +25,7 @@
     "gecko": {
       "id": "chromecast-ultimate@firefox",
       "strict_compatibility": false,
-      "android_min_version": "128",
-      "data_collection_permissions": {
-        "required": ["telemetry"]
-      }
+      "android_min_version": "128"
     }
   }
 }
