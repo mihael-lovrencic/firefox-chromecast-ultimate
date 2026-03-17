@@ -219,7 +219,7 @@ async function cast(url) {
     const res = await fetchWithTimeout(`${serverUrl}/cast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, device })
+      body: JSON.stringify({ url })
     });
     const result = await res.json();
     setStatus('Casting started: ' + url.substring(0, 40) + '...');
@@ -269,6 +269,8 @@ async function setVolume(value) {
 }
 
 async function addSubtitle(file) {
+  setStatus('Subtitles not supported by Android app');
+  return;
   if (!file || !serverUrl || !validateServerUrl(serverUrl)) return;
   try {
     const data = await file.text();

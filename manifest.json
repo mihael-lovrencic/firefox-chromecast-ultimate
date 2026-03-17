@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chromecast Ultimate",
-  "version": "4.0.5",
+  "version": "4.0.6",
   "description": "Cast videos and mirror tabs to Chromecast devices directly from Firefox",
   "license": "https://choosealicense.com/licenses/mit/",
   "id": "chromecast-ultimate@firefox",
