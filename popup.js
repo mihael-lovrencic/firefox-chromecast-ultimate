@@ -22,6 +22,7 @@ let statusPollTimer = null;
 let statusInFlight = false;
 let statusFailCount = 0;
 let lastSeenAt = 0;
+let selectedDevice = localStorage.getItem('selectedDevice') || '';
 
 function validateServerUrl(url) {
   if (!url || typeof url !== 'string') return false;
@@ -193,6 +194,13 @@ async function loadDevices() {
         opt.textContent = d.name || d.address;
         devicesSelect.appendChild(opt);
       });
+      if (selectedDevice && devices.some(d => d.address === selectedDevice)) {
+        devicesSelect.value = selectedDevice;
+      } else if (devices.length === 1) {
+        devicesSelect.value = devices[0].address;
+        selectedDevice = devices[0].address;
+        localStorage.setItem('selectedDevice', selectedDevice);
+      }
       setStatus(`Found ${devices.length} device(s)`);
     }
   } catch (e) {
@@ -422,6 +430,12 @@ if (downloadAppBtn) {
     browser.tabs.create({ url: APP_DOWNLOAD_URL });
   };
 }
+devicesSelect.addEventListener('change', () => {
+  selectedDevice = devicesSelect.value;
+  if (selectedDevice) {
+    localStorage.setItem('selectedDevice', selectedDevice);
+  }
+});
 
 loadDevices();
 setTimeout(loadVideos, 500);
