@@ -9,13 +9,42 @@ const videosContainer = document.getElementById('videos');
 const playlistContainer = document.getElementById('playlist');
 const serverInput = document.getElementById('serverUrl');
 
-if (serverInput && serverUrl) serverInput.value = serverUrl;
+const REQUEST_TIMEOUT = 5000;
+
+function validateServerUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const parsed = new URL(url);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && 
+           (parsed.hostname.match(/^(\d{1,3}\.){3}\d{1,3}$/) || 
+            parsed.hostname.match(/^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[0-1])/));
+  } catch {
+    return false;
+  }
+}
+
+async function fetchWithTimeout(url, options = {}, timeout = REQUEST_TIMEOUT) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
 
 function setStatus(msg) {
   statusEl.textContent = msg;
 }
 
 function updateServerUrl(url) {
+  if (!validateServerUrl(url)) {
+    setStatus('Invalid server URL. Use local IP (192.168.x.x or 10.x.x.x)');
+    return;
+  }
   serverUrl = url;
   localStorage.setItem('serverUrl', url);
   loadDevices();
@@ -27,6 +56,10 @@ async function discoverServer() {
     const services = await getMDNSServices();
     if (services.length > 0) {
       discoveredServerUrl = `http://${services[0].addresses[0]}:5000`;
+      if (!validateServerUrl(discoveredServerUrl)) {
+        setStatus('Found server but IP not in private range');
+        return;
+      }
       serverUrl = discoveredServerUrl;
       localStorage.setItem('serverUrl', serverUrl);
       if (serverInput) serverInput.value = serverUrl;
@@ -46,7 +79,7 @@ async function getMDNSServices() {
   
   const checkUrl = async (ip) => {
     try {
-      await fetch(`http://${ip}:5000/status`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' });
+      await fetchWithTimeout(`http://${ip}:5000/status`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' }, 2000);
       return ip;
     } catch (e) {
       return null;
@@ -94,8 +127,12 @@ async function getLocalIP() {
 }
 
 async function loadDevices() {
+  if (!serverUrl || !validateServerUrl(serverUrl)) {
+    setStatus('Enter valid server URL first');
+    return;
+  }
   try {
-    const res = await fetch(`${serverUrl}/devices`);
+    const res = await fetchWithTimeout(`${serverUrl}/devices`, {}, 10000);
     const devices = await res.json();
     devicesSelect.innerHTML = '';
     if (devices.length === 0) {
@@ -169,13 +206,17 @@ function clearPlaylist() {
 }
 
 async function cast(url) {
+  if (!serverUrl || !validateServerUrl(serverUrl)) {
+    setStatus('Enter valid server URL first');
+    return;
+  }
   const device = devicesSelect.value;
   if (!device) {
     setStatus('Please select a device first');
     return;
   }
   try {
-    const res = await fetch(`${serverUrl}/cast`, {
+    const res = await fetchWithTimeout(`${serverUrl}/cast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, device })
@@ -188,8 +229,9 @@ async function cast(url) {
 }
 
 async function control(action) {
+  if (!serverUrl || !validateServerUrl(serverUrl)) return;
   try {
-    await fetch(`${serverUrl}/control`, {
+    await fetchWithTimeout(`${serverUrl}/control`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action })
@@ -201,8 +243,9 @@ async function control(action) {
 }
 
 async function setSeek(value) {
+  if (!serverUrl || !validateServerUrl(serverUrl)) return;
   try {
-    await fetch(`${serverUrl}/seek`, {
+    await fetchWithTimeout(`${serverUrl}/seek`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ value })
@@ -213,8 +256,9 @@ async function setSeek(value) {
 }
 
 async function setVolume(value) {
+  if (!serverUrl || !validateServerUrl(serverUrl)) return;
   try {
-    await fetch(`${serverUrl}/volume`, {
+    await fetchWithTimeout(`${serverUrl}/volume`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ value })
@@ -225,10 +269,10 @@ async function setVolume(value) {
 }
 
 async function addSubtitle(file) {
-  if (!file) return;
+  if (!file || !serverUrl || !validateServerUrl(serverUrl)) return;
   try {
     const data = await file.text();
-    await fetch(`${serverUrl}/subtitle`, {
+    await fetchWithTimeout(`${serverUrl}/subtitle`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: data })
@@ -248,9 +292,13 @@ document.getElementById('yt').onclick = async () => {
 };
 
 document.getElementById('mirror').onclick = async () => {
+  if (!serverUrl || !validateServerUrl(serverUrl)) {
+    setStatus('Enter valid server URL first');
+    return;
+  }
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   try {
-    await fetch(`${serverUrl}/mirror`, {
+    await fetchWithTimeout(`${serverUrl}/mirror`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: tab.url })
