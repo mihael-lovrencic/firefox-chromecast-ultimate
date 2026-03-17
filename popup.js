@@ -8,6 +8,8 @@ const devicesSelect = document.getElementById('devices');
 const videosContainer = document.getElementById('videos');
 const playlistContainer = document.getElementById('playlist');
 const serverInput = document.getElementById('serverUrl');
+const progressInput = document.getElementById('progress');
+const volumeInput = document.getElementById('volume');
 
 const REQUEST_TIMEOUT = 5000;
 
@@ -48,6 +50,7 @@ function updateServerUrl(url) {
   serverUrl = url;
   localStorage.setItem('serverUrl', url);
   loadDevices();
+  refreshStatus();
 }
 
 async function discoverServer() {
@@ -151,8 +154,32 @@ async function loadDevices() {
       setStatus(`Found ${devices.length} device(s)`);
     }
   } catch (e) {
-    setStatus('Server not running. Start server.js first.');
+    setStatus('Server not running. Start the server in the Android app.');
     devicesSelect.innerHTML = '<option value="">Server not connected</option>';
+  }
+}
+
+async function refreshStatus() {
+  if (!serverUrl || !validateServerUrl(serverUrl)) return;
+  try {
+    const res = await fetchWithTimeout(`${serverUrl}/status`, {}, 5000);
+    const status = await res.json();
+
+    if (typeof status.volume === 'number' && volumeInput) {
+      volumeInput.value = Math.round(status.volume * 100);
+    }
+
+    if (typeof status.durationMs === 'number' && status.durationMs > 0 && progressInput) {
+      progressInput.max = status.durationMs;
+      const position = typeof status.positionMs === 'number' ? status.positionMs : 0;
+      progressInput.value = Math.min(position, status.durationMs);
+    }
+
+    if (status.connected === false) {
+      setStatus('Not connected to Chromecast. Open the app to connect.');
+    }
+  } catch (e) {
+    // Ignore status errors; server might not be running yet.
   }
 }
 
@@ -219,10 +246,15 @@ async function cast(url) {
     const res = await fetchWithTimeout(`${serverUrl}/cast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url, device })
     });
-    const result = await res.json();
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || result.success === false) {
+      setStatus(result.error || 'Casting failed');
+      return;
+    }
     setStatus('Casting started: ' + url.substring(0, 40) + '...');
+    refreshStatus();
   } catch (e) {
     setStatus('Error casting: ' + e.message);
   }
@@ -237,6 +269,7 @@ async function control(action) {
       body: JSON.stringify({ action })
     });
     setStatus('Action: ' + action);
+    refreshStatus();
   } catch (e) {
     setStatus('Control error: ' + e.message);
   }
@@ -245,11 +278,13 @@ async function control(action) {
 async function setSeek(value) {
   if (!serverUrl || !validateServerUrl(serverUrl)) return;
   try {
+    const ms = parseInt(value, 10);
     await fetchWithTimeout(`${serverUrl}/seek`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value })
+      body: JSON.stringify({ value: ms })
     });
+    refreshStatus();
   } catch (e) {
     console.error('Seek error:', e);
   }
@@ -258,11 +293,13 @@ async function setSeek(value) {
 async function setVolume(value) {
   if (!serverUrl || !validateServerUrl(serverUrl)) return;
   try {
+    const volume = Math.max(0, Math.min(1, parseInt(value, 10) / 100));
     await fetchWithTimeout(`${serverUrl}/volume`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value })
+      body: JSON.stringify({ value: volume })
     });
+    refreshStatus();
   } catch (e) {
     console.error('Volume error:', e);
   }
@@ -326,3 +363,4 @@ document.getElementById('discoverServer').onclick = discoverServer;
 
 loadDevices();
 setTimeout(loadVideos, 500);
+setInterval(refreshStatus, 2000);
