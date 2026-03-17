@@ -45,8 +45,11 @@ jobs:
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+      - name: Compute short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: web-ext-artifacts
+          name: web-ext-${{ github.run_number }}-${{ env.SHORT_SHA }}
           path: web-ext-artifacts/
