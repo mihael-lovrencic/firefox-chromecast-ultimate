@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Smart Chromecast Sender ULTIMATE",
+  "version": "6.0",
+  "description": "Full-feature Chromecast casting, tab mirroring, subtitles, playlists, and advanced controls",
+  "id": "smart-chromecast-ultimate@firefox",
+  "permissions": ["activeTab", "tabs", "scripting"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icons/icon.svg"
+  },
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg",
+    "128": "icons/icon.svg"
+  },
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "smart-chromecast-ultimate@firefox",
+      "strict_compatibility": false
+    }
+  }
+}

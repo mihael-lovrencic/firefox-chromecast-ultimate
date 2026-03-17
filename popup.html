@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; width: 380px; padding: 10px; margin: 0; }
+    h3 { margin: 0 0 10px 0; color: #4285f4; }
+    h4 { margin: 10px 0 5px 0; color: #666; }
+    select, button, input { width: 100%; margin-top: 5px; box-sizing: border-box; }
+    button { padding: 8px; cursor: pointer; background: #4285f4; color: white; border: none; border-radius: 4px; }
+    button:hover { background: #3367d6; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    label { display: block; margin-top: 8px; font-size: 12px; color: #666; }
+    #progress, #volume { width: 100%; }
+    #videos, #playlist { margin-top: 5px; }
+    #videos button, #playlist div { margin: 2px 0; font-size: 11px; }
+    hr { margin: 12px 0; border: none; border-top: 1px solid #ddd; }
+    .status { font-size: 11px; color: #666; margin-top: 5px; }
+    .video-btn { background: #34a853; }
+    .video-btn:hover { background: #2d8f47; }
+    input[type="file"] { font-size: 11px; }
+  </style>
+</head>
+<body>
+  <h3>Chromecast ULTIMATE</h3>
+  <div id="status" class="status">Connecting to server...</div>
+
+  <label>Device:</label>
+  <select id="devices"><option value="">Loading devices...</option></select>
+
+  <label>Videos on Current Tab:</label>
+  <div id="videos"><button id="scanVideos">Scan for Videos</button></div>
+
+  <button id="yt">Cast Current Page (YouTube)</button>
+  <button id="mirror">Mirror Tab</button>
+
+  <hr>
+
+  <button onclick="control('play')">▶ Play</button>
+  <button onclick="control('pause')">⏸ Pause</button>
+  <button onclick="control('stop')">⏹ Stop</button>
+
+  <label>Seek:</label>
+  <input type="range" id="progress" min="0" max="100" value="0">
+
+  <label>Volume:</label>
+  <input type="range" id="volume" min="0" max="100" value="50">
+
+  <hr>
+
+  <label>Subtitles (.srt/.vtt):</label>
+  <input type="file" id="subtitle" accept=".srt,.vtt">
+
+  <hr>
+  <h4>Playlist Queue</h4>
+  <div id="playlist"></div>
+  <button onclick="clearPlaylist()" style="background:#fbbc04; margin-top:5px;">Clear Playlist</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>
