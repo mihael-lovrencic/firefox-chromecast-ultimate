@@ -22,9 +22,11 @@ jobs:
         run: npx web-ext build
 
       - name: Upload to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: web-ext-artifacts/*.zip
-          release_url: ${{ github.event.release.html_url }}
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: web-ext-artifacts/*.zip
+          asset_name: firefox-chromecast-ultimate-${{ github.event.release.tag_name }}.zip
+          asset_content_type: application/zip
