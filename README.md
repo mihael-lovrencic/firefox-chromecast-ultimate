@@ -9,7 +9,7 @@ A Firefox extension for casting videos and mirroring tabs to Chromecast devices 
 - **YouTube Support** - Cast the current page (YouTube) directly
 - **Tab Mirroring** - Mirror your browser tab to Chromecast
 - **Remote Controls** - Play, pause, stop, seek, and volume control
-- **Subtitles** - Load .srt or .vtt subtitle files
+- **Subtitles** - Load .srt or .vtt subtitle files and apply them to the current cast
 - **Playlist** - Queue multiple videos for playback
 
 ## Installation
@@ -38,6 +38,7 @@ This extension requires the [ChromecastUltimate](https://github.com/mihael-lovre
 
 1. Install the ChromecastUltimate app on your Android device
 2. Open the app and tap **"Start Server"**
+   - The server runs as a foreground service, so it stays available even if you leave the app
 3. Make sure your Android device and Firefox browser are on the same network
 4. The extension will discover your Android device as a Chromecast
 
@@ -53,8 +54,9 @@ The extension communicates with the Android app's HTTP server (port 5000):
 | `/seek` | POST | Seek position (body: `{"value": milliseconds}`) |
 | `/volume` | POST | Set volume (body: `{"value": 0.0-1.0}`) |
 | `/mirror` | POST | Start tab mirroring |
-| `/subtitle` | POST | Load subtitle (body: `{"content": "..."}`) |
-| `/status` | GET | Get connection status |
+| `/subtitle` | POST | Load subtitle (body: `{"content": "...", "filename": "file.srt", "format": "srt\|vtt"}`) |
+| `/subtitle/{id}` | GET | Fetch subtitle file (used by Chromecast) |
+| `/status` | GET | Get connection status (includes `positionMs` and `durationMs`) |
 
 ## Usage
 
@@ -64,6 +66,14 @@ The extension communicates with the Android app's HTTP server (port 5000):
 4. Click "Scan for Devices" to discover Chromecast devices
 5. Select your Chromecast device from the dropdown
 6. Cast videos or mirror tabs
+
+### Subtitles
+
+1. Start a cast (or queue subtitles before casting)
+2. Click **Subtitles** and select a `.srt` or `.vtt` file
+3. The extension uploads the subtitle to the Android app and applies it to the current cast
+
+If no cast is active, subtitles are queued and will be applied on the next `/cast`.
 
 ### Android Firefox
 
