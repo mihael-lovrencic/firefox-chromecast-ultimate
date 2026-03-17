@@ -3,6 +3,7 @@
   "name": "Chromecast Ultimate",
   "version": "1.0.0",
   "description": "Cast videos and mirror tabs to Chromecast devices directly from Firefox",
+  "license": "MIT",
   "id": "chromecast-ultimate@firefox",
   "permissions": ["activeTab", "tabs", "scripting"],
   "action": {
