@@ -21,12 +21,15 @@ jobs:
       - name: Build extension
         run: npx web-ext build
 
+      - name: Find built file
+        run: echo "ASSET_FILE=$(ls web-ext-artifacts/*.zip)" >> $GITHUB_ENV
+
       - name: Upload to Release
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: web-ext-artifacts/*.zip
+          asset_path: ${{ env.ASSET_FILE }}
           asset_name: firefox-chromecast-ultimate-${{ github.event.release.tag_name }}.zip
           asset_content_type: application/zip
