@@ -27,12 +27,11 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: v${{ env.VERSION }}
+          tag: v${{ env.VERSION }}
           name: Firefox Chromecast Ultimate v${{ env.VERSION }}
           draft: false
           prerelease: false
-          files: web-ext-artifacts/*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: web-ext-artifacts/*.zip
+          artifactAssets: web-ext-artifacts/*.zip
