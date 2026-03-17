@@ -1,6 +1,7 @@
 let currentSession = null;
 let playlist = [];
-let serverUrl = localStorage.getItem('serverUrl') || 'http://localhost:5000';
+let serverUrl = localStorage.getItem('serverUrl') || '';
+let discoveredServerUrl = '';
 
 const statusEl = document.getElementById('status');
 const devicesSelect = document.getElementById('devices');
@@ -8,7 +9,7 @@ const videosContainer = document.getElementById('videos');
 const playlistContainer = document.getElementById('playlist');
 const serverInput = document.getElementById('serverUrl');
 
-if (serverInput) serverInput.value = serverUrl;
+if (serverInput && serverUrl) serverInput.value = serverUrl;
 
 function setStatus(msg) {
   statusEl.textContent = msg;
@@ -18,6 +19,78 @@ function updateServerUrl(url) {
   serverUrl = url;
   localStorage.setItem('serverUrl', url);
   loadDevices();
+}
+
+async function discoverServer() {
+  setStatus('Searching for ChromecastUltimate server...');
+  try {
+    const services = await getMDNSServices();
+    if (services.length > 0) {
+      discoveredServerUrl = `http://${services[0].addresses[0]}:5000`;
+      serverUrl = discoveredServerUrl;
+      localStorage.setItem('serverUrl', serverUrl);
+      if (serverInput) serverInput.value = serverUrl;
+      setStatus(`Found server at ${services[0].addresses[0]}`);
+      loadDevices();
+    } else {
+      setStatus('No server found. Enter IP manually.');
+    }
+  } catch (e) {
+    console.error('Discovery error:', e);
+    setStatus('Discovery failed. Enter IP manually.');
+  }
+}
+
+async function getMDNSServices() {
+  const found = [];
+  
+  const checkUrl = async (ip) => {
+    try {
+      await fetch(`http://${ip}:5000/status`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' });
+      return ip;
+    } catch (e) {
+      return null;
+    }
+  };
+  
+  const localIp = await getLocalIP();
+  const subnet = localIp ? localIp.substring(0, localIp.lastIndexOf('.')) : '192.168.1';
+  
+  const chunks = [];
+  for (let i = 1; i <= 254; i += 10) {
+    const chunk = [];
+    for (let j = i; j < Math.min(i + 10, 255); j++) {
+      chunk.push(checkUrl(`${subnet}.${j}`));
+    }
+    chunks.push(chunk);
+  }
+  
+  for (const chunk of chunks) {
+    const results = await Promise.all(chunk);
+    const foundIp = results.find(ip => ip !== null);
+    if (foundIp) {
+      found.push({ addresses: [foundIp], name: 'ChromecastUltimate' });
+      break;
+    }
+  }
+  
+  return found;
+}
+
+async function getLocalIP() {
+  return new Promise((resolve) => {
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    pc.createDataChannel('');
+    pc.onicecandidate = (e) => {
+      if (e.candidate && e.candidate.candidate) {
+        const match = e.candidate.candidate.match(/(\d+\.\d+\.\d+)\.\d+/);
+        pc.close();
+        resolve(match ? match[1] + '.1' : null);
+      }
+    };
+    pc.createOffer().then(o => pc.setLocalDescription(o));
+    setTimeout(() => { pc.close(); resolve(null); }, 1000);
+  });
 }
 
 async function loadDevices() {
@@ -198,6 +271,8 @@ const serverUrlInput = document.getElementById('serverUrl');
 if (serverUrlInput) {
   serverUrlInput.addEventListener('change', (e) => updateServerUrl(e.target.value));
 }
+
+document.getElementById('discoverServer').onclick = discoverServer;
 
 loadDevices();
 setTimeout(loadVideos, 500);
