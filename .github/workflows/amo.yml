@@ -16,15 +16,15 @@ jobs:
           node-version: '20'
 
       - name: Install web-ext
-        run: npm install -g web-ext@latest
+        run: npm install -g web-ext
 
       - name: Build extension
         run: npx web-ext build
 
-      - name: Submit to AMO
+      - name: Submit to AMO (unlisted first)
         run: |
           npx web-ext sign \
-            --channel listed \
+            --channel unlisted \
             --api-key "${{ secrets.AMO_JWT_ISSUER }}" \
             --api-secret "${{ secrets.AMO_JWT_SECRET }}"
         env:
