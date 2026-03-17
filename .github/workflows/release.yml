@@ -34,4 +34,4 @@ jobs:
           draft: false
           prerelease: false
           artifacts: web-ext-artifacts/*.zip
-          artifactAssets: web-ext-artifacts/*.zip
+          token: ${{ secrets.RELEASE_TOKEN }}
