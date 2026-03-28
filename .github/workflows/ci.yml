@@ -19,16 +19,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: '22'
 
       - name: Install web-ext
         run: npm install -g web-ext
 
       - name: Lint extension
         run: npx web-ext lint
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
   build:
     runs-on: ubuntu-latest
@@ -38,16 +35,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: '22'
 
       - name: Install web-ext
         run: npm install -g web-ext
 
       - name: Build extension
         run: npx web-ext build
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
       - name: Compute short SHA
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
