@@ -18,6 +18,8 @@ if (!discoveredDevicesContainer) console.error('discoveredDevices element not fo
 const helperStatusEl = document.getElementById('helperStatus');
 const helperDevicesEl = document.getElementById('helperDevices');
 const startHelperBtn = document.getElementById('startHelper');
+const checkNativeHostBtn = document.getElementById('checkNativeHost');
+const openHelperStatusBtn = document.getElementById('openHelperStatus');
 
 const REQUEST_TIMEOUT = 5000;
 
@@ -94,6 +96,29 @@ if (startHelperBtn) {
     } catch (e) {
       if (helperStatusEl) helperStatusEl.textContent = `Helper start failed: ${e.message}`;
     }
+  };
+}
+
+if (checkNativeHostBtn) {
+  checkNativeHostBtn.onclick = async () => {
+    if (helperStatusEl) helperStatusEl.textContent = 'Checking native host...';
+    try {
+      const res = await browser.runtime.sendNativeMessage('chromecast_ultimate_helper', { type: 'ping' });
+      if (res && res.ok) {
+        if (helperStatusEl) helperStatusEl.textContent = 'Native host OK';
+      } else {
+        if (helperStatusEl) helperStatusEl.textContent = 'Native host error';
+      }
+    } catch (e) {
+      if (helperStatusEl) helperStatusEl.textContent = `Native host error: ${e.message}`;
+    }
+  };
+}
+
+if (openHelperStatusBtn) {
+  openHelperStatusBtn.onclick = async () => {
+    await browser.tabs.create({ url: 'http://localhost:4269/status' });
+    await browser.tabs.create({ url: 'http://127.0.0.1:4269/status' });
   };
 }
 
