@@ -1,5 +1,5 @@
 const http = require('http');
-const { Client, DefaultMediaReceiver } = require('castv2-client');
+const { Client, DefaultMediaReceiver, Application, RequestResponseController } = require('castv2-client');
 const { Bonjour } = require('bonjour-service');
 
 const HOST = '127.0.0.1';
@@ -76,6 +76,84 @@ function detectContentType(url) {
   return 'video/mp4';
 }
 
+function isYouTubeUrl(url) {
+  return /(^https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test(url);
+}
+
+function extractYouTubeId(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtu.be')) {
+      return u.pathname.replace('/', '');
+    }
+    if (u.hostname.includes('youtube.com')) {
+      if (u.searchParams.get('v')) return u.searchParams.get('v');
+      const parts = u.pathname.split('/');
+      const embedIndex = parts.indexOf('embed');
+      if (embedIndex >= 0 && parts[embedIndex + 1]) return parts[embedIndex + 1];
+      const shortsIndex = parts.indexOf('shorts');
+      if (shortsIndex >= 0 && parts[shortsIndex + 1]) return parts[shortsIndex + 1];
+    }
+  } catch (_) {}
+  return null;
+}
+
+class YouTubeApp extends Application {
+  constructor(client, session) {
+    super(client, session);
+    this.reqres = this.createController(RequestResponseController, 'urn:x-cast:com.google.cast.media');
+    this.yt = this.createController(RequestResponseController, 'urn:x-cast:com.google.youtube.mdx');
+    this.currentSession = null;
+    const onMessage = (response, broadcast) => {
+      if (response.type === 'MEDIA_STATUS' && broadcast) {
+        this.currentSession = response.status[0];
+      }
+    };
+    this.reqres.on('message', onMessage);
+    this.reqres.once('close', () => this.reqres.removeListener('message', onMessage));
+  }
+
+  getStatus(cb) {
+    this.reqres.request({ type: 'GET_STATUS' }, (err, response) => {
+      if (err) return cb(err);
+      const status = response.status && response.status[0];
+      this.currentSession = status || null;
+      cb(null, status);
+    });
+  }
+
+  sessionRequest(data, cb) {
+    const done = cb || (() => {});
+    const withSession = (status) => {
+      if (!status || !status.mediaSessionId) return done(new Error('No media session'));
+      this.reqres.request({ ...data, mediaSessionId: status.mediaSessionId }, (err, response) => {
+        if (err) return done(err);
+        done(null, response.status && response.status[0]);
+      });
+    };
+    if (this.currentSession) return withSession(this.currentSession);
+    this.getStatus((err, status) => {
+      if (err) return done(err);
+      withSession(status);
+    });
+  }
+
+  load(videoId, cb) {
+    const payload = {
+      type: 'flingVideo',
+      data: { currentTime: 0, videoId }
+    };
+    this.yt.request(payload);
+    if (cb) cb();
+  }
+
+  play(cb) { this.sessionRequest({ type: 'PLAY' }, cb); }
+  pause(cb) { this.sessionRequest({ type: 'PAUSE' }, cb); }
+  stop(cb) { this.sessionRequest({ type: 'STOP' }, cb); }
+}
+
+YouTubeApp.APP_ID = '233637DE';
+
 function castToDevice(device, url) {
   return new Promise((resolve, reject) => {
     const client = new Client();
@@ -85,19 +163,31 @@ function castToDevice(device, url) {
     };
     client.on('error', cleanup);
     client.connect(device.address, () => {
-      client.launch(DefaultMediaReceiver, (err, player) => {
-        if (err) return cleanup(err);
-        const media = {
-          contentId: url,
-          contentType: detectContentType(url),
-          streamType: 'BUFFERED'
-        };
-        player.load(media, { autoplay: true }, loadErr => {
-          if (loadErr) return cleanup(loadErr);
-          sessions.set(device.address, { client, player });
-          resolve();
+      if (isYouTubeUrl(url)) {
+        const videoId = extractYouTubeId(url);
+        if (!videoId) return cleanup(new Error('Invalid YouTube URL'));
+        client.launch(YouTubeApp, (err, app) => {
+          if (err) return cleanup(err);
+          app.load(videoId, () => {
+            sessions.set(device.address, { client, app, type: 'youtube' });
+            resolve();
+          });
         });
-      });
+      } else {
+        client.launch(DefaultMediaReceiver, (err, player) => {
+          if (err) return cleanup(err);
+          const media = {
+            contentId: url,
+            contentType: detectContentType(url),
+            streamType: 'BUFFERED'
+          };
+          player.load(media, { autoplay: true }, loadErr => {
+            if (loadErr) return cleanup(loadErr);
+            sessions.set(device.address, { client, player, type: 'media' });
+            resolve();
+          });
+        });
+      }
     });
   });
 }
@@ -111,7 +201,11 @@ function stopSession(device) {
   const session = getSession(device);
   if (!session) return false;
   try {
-    session.player.stop(() => {});
+    if (session.type === 'youtube' && session.app) {
+      session.app.stop(() => {});
+    } else if (session.player) {
+      session.player.stop(() => {});
+    }
   } catch (_) {}
   session.client.close();
   sessions.delete(device.address);
@@ -162,10 +256,17 @@ const server = http.createServer(async (req, res) => {
       const device = body.device;
       const session = getSession(device);
       if (!session) return json(res, 404, { error: 'No active session' });
-      if (action === 'play') session.player.play(() => {});
-      else if (action === 'pause') session.player.pause(() => {});
-      else if (action === 'stop') stopSession(device);
-      else return json(res, 400, { error: 'Unknown action' });
+      if (action === 'play') {
+        if (session.type === 'youtube' && session.app) session.app.play(() => {});
+        else if (session.player) session.player.play(() => {});
+      } else if (action === 'pause') {
+        if (session.type === 'youtube' && session.app) session.app.pause(() => {});
+        else if (session.player) session.player.pause(() => {});
+      } else if (action === 'stop') {
+        stopSession(device);
+      } else {
+        return json(res, 400, { error: 'Unknown action' });
+      }
       return json(res, 200, { success: true });
     } catch (e) {
       return json(res, 500, { error: e.message });
