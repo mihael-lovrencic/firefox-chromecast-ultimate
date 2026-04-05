@@ -21,9 +21,17 @@ jobs:
       - name: Build extension
         run: npx web-ext build
 
+      - name: Find and rename built file
+        run: |
+          ZIP_FILE=$(ls web-ext-artifacts/*.zip)
+          cp "$ZIP_FILE" "firefox-chromecast-ultimate-${{ github.event.release.tag_name }}.xpi"
+
       - name: Upload to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: web-ext-artifacts/*.zip
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: firefox-chromecast-ultimate-${{ github.event.release.tag_name }}.xpi
+          asset_name: firefox-chromecast-ultimate-${{ github.event.release.tag_name }}.xpi
+          asset_content_type: application/x-xpinstall
