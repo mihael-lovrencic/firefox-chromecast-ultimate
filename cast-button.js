@@ -5,6 +5,39 @@
   
   const castButtons = new Map();
   let updateTimer = null;
+  const capturedUrls = [];
+
+  function installUrlSniffer() {
+    if (window.__chromecastSnifferInstalled) return;
+    window.__chromecastSnifferInstalled = true;
+    const script = document.createElement('script');
+    script.textContent = `
+      (function() {
+        if (window.__chromecastSnifferActive) return;
+        window.__chromecastSnifferActive = true;
+        const urls = new Set();
+        function report(url) {
+          if (!url || typeof url !== 'string') return;
+          if (!url.includes('.m3u8') && !url.includes('.mp4')) return;
+          if (urls.has(url)) return;
+          urls.add(url);
+          window.postMessage({ type: 'chromecast-url', url }, '*');
+        }
+        const origFetch = window.fetch;
+        window.fetch = function(...args) {
+          try { report(args[0]?.toString?.() || args[0]); } catch (_) {}
+          return origFetch.apply(this, args);
+        };
+        const origOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+          try { report(url); } catch (_) {}
+          return origOpen.call(this, method, url, ...rest);
+        };
+      })();
+    `;
+    document.documentElement.appendChild(script);
+    script.remove();
+  }
   
   function createCastButton(video) {
     if (castButtons.has(video)) return;
@@ -125,6 +158,14 @@
   if (!updateTimer) {
     updateTimer = setInterval(updateButtons, 500);
   }
+
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
+    if (event.data?.type === 'chromecast-url' && event.data.url) {
+      capturedUrls.push(event.data.url);
+    }
+  });
+  installUrlSniffer();
   
   function shouldProxy(url) {
     if (!url) return false;
@@ -141,7 +182,7 @@
       const perf = performance.getEntriesByType('resource')
         .map(e => e.name)
         .filter(n => n.includes('.m3u8') || n.includes('.mp4'));
-      return sources.pop() || perf.pop() || null;
+      return sources.pop() || capturedUrls[capturedUrls.length - 1] || perf.pop() || null;
     } catch (_) {
       return null;
     }
