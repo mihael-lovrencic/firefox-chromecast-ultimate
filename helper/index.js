@@ -1,12 +1,14 @@
 const http = require('http');
+const os = require('os');
 const { Readable } = require('stream');
 const { Client, DefaultMediaReceiver, Application, RequestResponseController } = require('castv2-client');
 const { Bonjour } = require('bonjour-service');
 
-const HOST = '127.0.0.1';
+const HOST = '0.0.0.0';
 const PORT = 4269;
 const DISCOVERY_TIMEOUT_MS = 2000;
 const sessions = new Map();
+const LOCAL_IP = getLocalIp() || '127.0.0.1';
 
 function json(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -77,10 +79,22 @@ function detectContentType(url) {
   return 'video/mp4';
 }
 
+function getLocalIp() {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return null;
+}
+
 function buildProxyUrl(url, referer) {
   const params = new URLSearchParams({ url });
   if (referer) params.set('referer', referer);
-  return `http://127.0.0.1:${PORT}/proxy?${params.toString()}`;
+  return `http://${LOCAL_IP}:${PORT}/proxy?${params.toString()}`;
 }
 
 function isM3U8(url, contentType) {
@@ -293,7 +307,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && req.url === '/status') {
-    return json(res, 200, { status: 'ok', version: '1.0.0' });
+    return json(res, 200, { status: 'ok', version: '1.0.0', host: LOCAL_IP });
   }
 
   if (req.method === 'GET' && req.url === '/devices') {
@@ -365,5 +379,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Helper running at http://${HOST}:${PORT}`);
+  console.log(`Helper running at http://${LOCAL_IP}:${PORT}`);
 });
