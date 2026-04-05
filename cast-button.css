@@ -8,7 +8,7 @@
   border: none;
   border-radius: 50%;
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.9;
   transition: opacity 0.3s, transform 0.2s;
   z-index: 2147483647;
   display: flex;
@@ -52,7 +52,7 @@
   border-radius: 4px;
   font-size: 12px;
   white-space: nowrap;
-  opacity: 0;
+  opacity: 1;
   pointer-events: none;
   transition: opacity 0.2s;
 }
