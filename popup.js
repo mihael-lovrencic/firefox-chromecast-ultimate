@@ -4,12 +4,16 @@ let serverUrl = localStorage.getItem('serverUrl') || '';
 let currentMode = localStorage.getItem('castMode') || 'standalone';
 let selectedDevice = null;
 
+console.log('popup.js loaded!');
+
 const statusEl = document.getElementById('status');
+if (!statusEl) console.error('status element not found!');
 const devicesSelect = document.getElementById('devices');
 const videosContainer = document.getElementById('videos');
 const playlistContainer = document.getElementById('playlist');
 const serverInput = document.getElementById('serverUrl');
 const discoveredDevicesContainer = document.getElementById('discoveredDevices');
+if (!discoveredDevicesContainer) console.error('discoveredDevices element not found!');
 
 const REQUEST_TIMEOUT = 5000;
 
