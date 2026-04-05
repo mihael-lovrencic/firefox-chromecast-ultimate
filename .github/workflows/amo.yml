@@ -25,10 +25,13 @@ jobs:
 
       - name: Submit to AMO (listed/public)
         run: |
+          echo "AMO API Key exists: ${{ secrets.AMO_JWT_ISSUER != '' }}"
           npx web-ext sign \
             --channel listed \
             --api-key "${{ secrets.AMO_JWT_ISSUER }}" \
-            --api-secret "${{ secrets.AMO_JWT_SECRET }}"
+            --api-secret "${{ secrets.AMO_JWT_SECRET }}" \
+            --timeout 300000 \
+            --verbose
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
