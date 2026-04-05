@@ -7,6 +7,7 @@ const Castv2Client = {
     return new Promise((resolve, reject) => {
       const socket = new WebSocket(`ws://${host}:${port}`);
       let connected = false;
+      let responseHandler = null;
       
       socket.onopen = () => {
         connected = true;
@@ -14,7 +15,8 @@ const Castv2Client = {
         resolve({
           socket,
           send: (data) => socket.send(JSON.stringify(data)),
-          close: () => socket.close()
+          close: () => socket.close(),
+          onMessage: (handler) => { responseHandler = handler; }
         });
       };
       
@@ -30,7 +32,8 @@ const Castv2Client = {
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          this.handleMessage(data);
+          console.log('Castv2: Message', data);
+          if (responseHandler) responseHandler(data);
         } catch (e) {
           console.log('Castv2: Raw message', event.data);
         }
@@ -40,35 +43,86 @@ const Castv2Client = {
         if (!connected) reject(new Error('Connection timeout'));
       }, 10000);
     });
-  },
-  
-  handleMessage(data) {
-    console.log('Castv2: Message', data);
   }
 };
 
-const MDNSDiscovery = {
-  async discover(timeout = 5000) {
+const ChromecastDiscovery = {
+  async discover() {
     const devices = [];
-    const startTime = Date.now();
     
-    const scanSubnet = async (subnet) => {
-      const promises = [];
-      for (let i = 1; i <= 254; i++) {
-        const ip = `${subnet}.${i}`;
-        promises.push(this.checkDevice(ip).then(device => {
-          if (device) devices.push(device);
-        }).catch(() => {}));
-      }
-      await Promise.all(promises);
+    const checkDevice = (ip) => {
+      return new Promise((resolve) => {
+        try {
+          const socket = new WebSocket(`ws://${ip}:8009`);
+          let timeout = setTimeout(() => {
+            socket.close();
+            resolve(null);
+          }, 2000);
+          
+          socket.onopen = () => {
+            clearTimeout(timeout);
+            socket.send(JSON.stringify({
+              type: 'GET_APP_AVAILABILITY',
+              requestId: 1,
+              apps: ['YouTube', 'Netflix']
+            }));
+          };
+          
+          socket.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.type === 'receiver' || data.status) {
+                clearTimeout(timeout);
+                socket.close();
+                resolve({
+                  name: `Chromecast (${ip})`,
+                  address: ip,
+                  port: 8009
+                });
+              } else {
+                clearTimeout(timeout);
+                socket.close();
+                resolve({
+                  name: `Chromecast (${ip})`,
+                  address: ip,
+                  port: 8009
+                });
+              }
+            } catch (e) {
+              clearTimeout(timeout);
+              socket.close();
+              resolve({
+                name: `Chromecast (${ip})`,
+                address: ip,
+                port: 8009
+              });
+            }
+          };
+          
+          socket.onerror = () => {
+            clearTimeout(timeout);
+            socket.close();
+            resolve(null);
+          };
+        } catch (e) {
+          resolve(null);
+        }
+      });
     };
     
     const localIp = await this.getLocalIP();
-    if (localIp) {
-      const subnet = localIp.substring(0, localIp.lastIndexOf('.'));
-      await scanSubnet(subnet);
-    } else {
-      await scanSubnet('192.168.1');
+    const subnets = localIp ? [localIp.substring(0, localIp.lastIndexOf('.'))] : ['192.168.1', '192.168.0'];
+    
+    for (const subnet of subnets) {
+      const promises = [];
+      for (let i = 1; i <= 254; i++) {
+        promises.push(checkDevice(`${subnet}.${i}`).then(device => {
+          if (device && !devices.find(d => d.address === device.address)) {
+            devices.push(device);
+          }
+        }).catch(() => {}));
+      }
+      await Promise.all(promises);
     }
     
     return devices;
@@ -88,32 +142,6 @@ const MDNSDiscovery = {
       pc.createOffer().then(o => pc.setLocalDescription(o));
       setTimeout(() => { pc.close(); resolve(null); }, 2000);
     });
-  },
-  
-  async checkDevice(ip) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 1000);
-      
-      const response = await fetch(`http://${ip}:8009`, {
-        method: 'GET',
-        signal: controller.signal
-      });
-      clearTimeout(timeout);
-      
-      const text = await response.text();
-      
-      if (text.includes('Google') || text.includes('Chromecast') || text.includes('Cast')) {
-        const nameMatch = text.match(/friendlyName["\s:=]+([^"<&]+)/i) || 
-                        text.match(/name["\s:=]+([^"<&]+)/i);
-        return {
-          name: nameMatch ? nameMatch[1].trim() : `Chromecast (${ip})`,
-          address: ip,
-          port: 8009
-        };
-      }
-    } catch (e) {}
-    return null;
   }
 };
 
@@ -161,7 +189,7 @@ const ChromecastSession = {
   
   async castVideo(url) {
     if (!this.socket || this.status !== Castv2Client.CONNECTED) {
-      const devices = await MDNSDiscovery.discover();
+      const devices = await ChromecastDiscovery.discover();
       if (devices.length === 0) {
         throw new Error('No devices found');
       }
@@ -202,7 +230,7 @@ const ChromecastSession = {
 
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'discoverDevices') {
-    MDNSDiscovery.discover().then(devices => {
+    ChromecastDiscovery.discover().then(devices => {
       sendResponse(devices);
     });
     return true;
