@@ -1,4 +1,4 @@
-const HELPER_URL = 'http://127.0.0.1:4269';
+const HELPER_URL = 'http://localhost:4269';
 let lastDevice = null;
 
 async function helperRequest(path, options = {}) {

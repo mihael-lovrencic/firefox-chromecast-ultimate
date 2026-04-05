@@ -3,7 +3,7 @@ let playlist = [];
 let serverUrl = localStorage.getItem('serverUrl') || '';
 let currentMode = localStorage.getItem('castMode') || 'standalone';
 let selectedDevice = null;
-const HELPER_URL = 'http://127.0.0.1:4269';
+const HELPER_URL = 'http://localhost:4269';
 
 console.log('popup.js loaded!');
 
