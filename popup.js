@@ -17,6 +17,7 @@ const discoveredDevicesContainer = document.getElementById('discoveredDevices');
 if (!discoveredDevicesContainer) console.error('discoveredDevices element not found!');
 const helperStatusEl = document.getElementById('helperStatus');
 const helperDevicesEl = document.getElementById('helperDevices');
+const startHelperBtn = document.getElementById('startHelper');
 
 const REQUEST_TIMEOUT = 5000;
 
@@ -73,6 +74,19 @@ function setMode(mode) {
 
 document.getElementById('modeStandalone').onclick = () => setMode('standalone');
 document.getElementById('modeAndroid').onclick = () => setMode('android');
+
+if (startHelperBtn) {
+  startHelperBtn.onclick = async () => {
+    if (helperStatusEl) helperStatusEl.textContent = 'Starting helper...';
+    try {
+      const res = await browser.runtime.sendMessage({ type: 'ensureHelper' });
+      if (res && res.error) throw new Error(res.error);
+      await refreshHelperStatus();
+    } catch (e) {
+      if (helperStatusEl) helperStatusEl.textContent = `Helper start failed: ${e.message}`;
+    }
+  };
+}
 
 async function scanForChromecasts() {
   setStatus('Scanning for Chromecasts...');
