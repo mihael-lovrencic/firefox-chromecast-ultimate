@@ -38,7 +38,6 @@
       "id": "chromecast-ultimate@firefox",
       "strict_compatibility": false,
       "android_min_version": "128",
-      "update_url": "https://addons.mozilla.org/extensions/update-check/chromecast-ultimate@firefox/",
       "data_collection_permissions": {
         "required": ["none"]
       }
