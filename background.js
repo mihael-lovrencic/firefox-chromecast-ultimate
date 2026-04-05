@@ -43,7 +43,9 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const device = message.device || lastDevice;
         const payload = {
           url: message.videoUrl,
-          device
+          device,
+          useProxy: !!message.useProxy,
+          referer: message.referer || ''
         };
         await helperRequest('/cast', {
           method: 'POST',

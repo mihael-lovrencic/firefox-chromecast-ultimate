@@ -1,4 +1,5 @@
 const http = require('http');
+const { Readable } = require('stream');
 const { Client, DefaultMediaReceiver, Application, RequestResponseController } = require('castv2-client');
 const { Bonjour } = require('bonjour-service');
 
@@ -74,6 +75,74 @@ function detectContentType(url) {
   if (lower.endsWith('.mp3')) return 'audio/mpeg';
   if (lower.endsWith('.wav')) return 'audio/wav';
   return 'video/mp4';
+}
+
+function buildProxyUrl(url, referer) {
+  const params = new URLSearchParams({ url });
+  if (referer) params.set('referer', referer);
+  return `http://127.0.0.1:${PORT}/proxy?${params.toString()}`;
+}
+
+function isM3U8(url, contentType) {
+  if (contentType && contentType.toLowerCase().includes('mpegurl')) return true;
+  return url.toLowerCase().includes('.m3u8');
+}
+
+async function proxyFetch(targetUrl, referer) {
+  const headers = {};
+  if (referer) headers.Referer = referer;
+  headers['User-Agent'] =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+  return fetch(targetUrl, { headers });
+}
+
+async function handleProxy(req, res) {
+  try {
+    const reqUrl = new URL(req.url, `http://${req.headers.host}`);
+    const target = reqUrl.searchParams.get('url');
+    const referer = reqUrl.searchParams.get('referer') || '';
+    if (!target) return json(res, 400, { error: 'Missing url' });
+    const targetUrl = new URL(target);
+    if (!['http:', 'https:'].includes(targetUrl.protocol)) {
+      return json(res, 400, { error: 'Invalid protocol' });
+    }
+
+    const upstream = await proxyFetch(targetUrl.toString(), referer);
+    const contentType = upstream.headers.get('content-type') || '';
+
+    if (isM3U8(targetUrl.toString(), contentType)) {
+      const text = await upstream.text();
+      const baseUrl = targetUrl.toString();
+      const rewritten = text
+        .split('\n')
+        .map(line => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) return line;
+          const absolute = new URL(trimmed, baseUrl).toString();
+          return buildProxyUrl(absolute, referer);
+        })
+        .join('\n');
+      res.writeHead(200, {
+        'Content-Type': contentType || 'application/vnd.apple.mpegurl',
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.end(rewritten);
+      return;
+    }
+
+    res.writeHead(upstream.status, {
+      'Content-Type': contentType || 'application/octet-stream',
+      'Access-Control-Allow-Origin': '*'
+    });
+    if (upstream.body) {
+      const nodeStream = Readable.fromWeb(upstream.body);
+      nodeStream.pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (e) {
+    return json(res, 500, { error: e.message });
+  }
 }
 
 function isYouTubeUrl(url) {
@@ -154,7 +223,7 @@ class YouTubeApp extends Application {
 
 YouTubeApp.APP_ID = '233637DE';
 
-function castToDevice(device, url) {
+function castToDevice(device, url, options = {}) {
   return new Promise((resolve, reject) => {
     const client = new Client();
     const cleanup = (err) => {
@@ -174,11 +243,12 @@ function castToDevice(device, url) {
           });
         });
       } else {
+        const castUrl = options.useProxy ? buildProxyUrl(url, options.referer) : url;
         client.launch(DefaultMediaReceiver, (err, player) => {
           if (err) return cleanup(err);
           const media = {
-            contentId: url,
-            contentType: detectContentType(url),
+            contentId: castUrl,
+            contentType: detectContentType(castUrl),
             streamType: 'BUFFERED'
           };
           player.load(media, { autoplay: true }, loadErr => {
@@ -231,10 +301,16 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, devices);
   }
 
+  if (req.method === 'GET' && req.url.startsWith('/proxy')) {
+    return handleProxy(req, res);
+  }
+
   if (req.method === 'POST' && req.url === '/cast') {
     try {
       const body = await readBody(req);
       const url = body.url;
+      const useProxy = !!body.useProxy;
+      const referer = body.referer || '';
       if (!url) return json(res, 400, { error: 'Missing url' });
       let device = body.device;
       if (!device) {
@@ -242,7 +318,7 @@ const server = http.createServer(async (req, res) => {
         device = devices[0];
       }
       if (!device) return json(res, 404, { error: 'No devices found' });
-      await castToDevice(device, url);
+      await castToDevice(device, url, { useProxy, referer });
       return json(res, 200, { success: true });
     } catch (e) {
       return json(res, 500, { error: e.message });

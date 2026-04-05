@@ -23,13 +23,18 @@
       e.stopPropagation();
       console.log('[Chromecast] Cast button clicked!');
       btn.textContent = '...';
-      const videoUrl = video.currentSrc || video.src;
+      let videoUrl = video.currentSrc || video.src;
+      if (videoUrl && videoUrl.startsWith('blob:')) {
+        const candidate = findCandidateUrl();
+        if (candidate) videoUrl = candidate;
+      }
       if (!videoUrl) {
         btn.textContent = 'NO URL';
         btn.style.background = '#f00';
         setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 2000);
         return;
       }
+      const useProxy = shouldProxy(videoUrl);
       browser.runtime.sendMessage({ type: 'discoverDevices' }).then(devices => {
         if (!devices || devices.length === 0) {
           btn.textContent = 'NO';
@@ -49,7 +54,7 @@
             }
             device = devices[index];
           }
-          browser.runtime.sendMessage({ type: 'castVideo', videoUrl, device }).then(res => {
+          browser.runtime.sendMessage({ type: 'castVideo', videoUrl, device, useProxy, referer: window.location.href }).then(res => {
             if (res && res.error) throw new Error(res.error);
             btn.textContent = 'CASTING';
             btn.style.background = '#34a853';
@@ -116,6 +121,27 @@
   window.addEventListener('resize', updateButtons);
   if (!updateTimer) {
     updateTimer = setInterval(updateButtons, 500);
+  }
+  
+  function shouldProxy(url) {
+    if (!url) return false;
+    if (/youtube\.com|youtu\.be/i.test(url)) return false;
+    return true;
+  }
+  
+  function findCandidateUrl() {
+    try {
+      const sources = [];
+      document.querySelectorAll('video source').forEach(s => {
+        if (s.src) sources.push(s.src);
+      });
+      const perf = performance.getEntriesByType('resource')
+        .map(e => e.name)
+        .filter(n => n.includes('.m3u8') || n.includes('.mp4'));
+      return sources.pop() || perf.pop() || null;
+    } catch (_) {
+      return null;
+    }
   }
   
 })();

@@ -19,6 +19,10 @@ A Firefox extension for casting videos and mirroring tabs to Chromecast devices.
 Standalone mode requires a small local helper service. Firefox extensions cannot access raw TCP/UDP sockets needed by
 the Chromecast protocol, so the helper handles discovery and casting on your behalf.
 
+#### Proxy Mode (for protected streams)
+Some sites use tokenized HLS/MP4 URLs that Chromecast cannot fetch directly. The helper can proxy the stream so
+Chromecast loads it from your PC. This is enabled automatically for non-YouTube URLs.
+
 #### Optional: Auto-start helper via Native Messaging (Windows)
 You can let the extension start the helper automatically using a native host.
 

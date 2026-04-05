@@ -159,10 +159,18 @@ async function castToChromecast(url) {
   }
   
   try {
+    let referer = '';
+    try {
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      referer = tab?.url || '';
+    } catch (_) {}
+    const useProxy = shouldProxy(url);
     const res = await browser.runtime.sendMessage({
       type: 'castVideo',
       videoUrl: url,
-      device: selectedDevice
+      device: selectedDevice,
+      useProxy,
+      referer
     });
     if (res && res.error) throw new Error(res.error);
     setStatus(`Casting to ${selectedDevice.name || selectedDevice.address}`);
@@ -424,3 +432,9 @@ if (serverUrlInput) {
 setMode(currentMode);
 setTimeout(loadVideos, 500);
 setInterval(refreshHelperStatus, 4000);
+
+function shouldProxy(url) {
+  if (!url) return false;
+  if (/youtube\.com|youtu\.be/i.test(url)) return false;
+  return true;
+}
