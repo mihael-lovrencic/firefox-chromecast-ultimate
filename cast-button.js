@@ -3,22 +3,21 @@
   
   console.log('[Chromecast] Content script loaded on:', window.location.href);
   
-  let castButtons = new Map();
+  const castButtons = new Map();
+  let updateTimer = null;
   
   function createCastButton(video) {
     if (castButtons.has(video)) return;
-    if (video.offsetWidth < 100 || video.offsetHeight < 50) return;
-    
     console.log('[Chromecast] Creating button for video:', video.src || video.currentSrc);
     
-    const container = document.createElement('div');
-    container.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:99999999;';
-    
     const btn = document.createElement('button');
+    btn.className = 'chromecast-btn';
     btn.textContent = 'CAST';
-    btn.id = 'chromecast-cast-btn';
-    btn.style.cssText = 'pointer-events:auto;position:absolute;bottom:10px;right:10px;width:50px;height:50px;background:#4285f4;color:white;border:none;border-radius:50%;cursor:pointer;font-size:12px;font-weight:bold;z-index:100000000;opacity:1;box-shadow:0 2px 10px rgba(0,0,0,0.5);';
     btn.title = 'Cast to Chromecast';
+    btn.style.position = 'fixed';
+    btn.style.pointerEvents = 'auto';
+    btn.style.bottom = 'auto';
+    btn.style.right = 'auto';
     
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -28,7 +27,7 @@
         if (!devices || devices.length === 0) {
           btn.textContent = 'NO';
           btn.style.background = '#f00';
-          setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = '#4285f4'; }, 2000);
+          setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 2000);
         } else {
           btn.textContent = 'OK';
           btn.style.background = '#0f0';
@@ -41,20 +40,40 @@
       });
     });
     
-    container.appendChild(btn);
-    
-    if (!video.parentElement) return;
-    video.parentElement.style.position = 'relative';
-    video.parentElement.appendChild(container);
-    
+    document.body.appendChild(btn);
     castButtons.set(video, btn);
     console.log('[Chromecast] Button created successfully!');
   }
   
+  function isVisible(rect) {
+    return rect.width >= 100 && rect.height >= 50 &&
+      rect.bottom > 0 && rect.right > 0 &&
+      rect.top < window.innerHeight && rect.left < window.innerWidth;
+  }
+  
+  function updateButtons() {
+    castButtons.forEach((btn, video) => {
+      if (!video.isConnected) {
+        btn.remove();
+        castButtons.delete(video);
+        return;
+      }
+      const rect = video.getBoundingClientRect();
+      if (!isVisible(rect)) {
+        btn.style.display = 'none';
+        return;
+      }
+      btn.style.display = 'flex';
+      btn.style.left = `${Math.max(0, rect.right - 50 - 10)}px`;
+      btn.style.top = `${Math.max(0, rect.bottom - 50 - 10)}px`;
+    });
+  }
+  
   function findVideos() {
     const videos = document.querySelectorAll('video');
-    console.log('[Chromecast] Found', videos.length, 'videos');
+    if (videos.length) console.log('[Chromecast] Found', videos.length, 'videos');
     videos.forEach(v => createCastButton(v));
+    updateButtons();
   }
   
   console.log('[Chromecast] Starting video search...');
@@ -64,5 +83,11 @@
   
   const observer = new MutationObserver(findVideos);
   observer.observe(document.body, { childList: true, subtree: true });
+  
+  window.addEventListener('scroll', updateButtons, { passive: true });
+  window.addEventListener('resize', updateButtons);
+  if (!updateTimer) {
+    updateTimer = setInterval(updateButtons, 500);
+  }
   
 })();

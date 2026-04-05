@@ -18,7 +18,9 @@
       "matches": ["<all_urls>"],
       "js": ["cast-button.js"],
       "css": ["cast-button.css"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
     }
   ],
   "background": {
