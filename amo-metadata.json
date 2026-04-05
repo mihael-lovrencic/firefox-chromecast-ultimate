@@ -1,5 +1,9 @@
 {
   "version": {
     "license": "MIT"
+  },
+  "categories": {
+    "firefox": ["photos-music-videos"],
+    "android": ["photos-music-videos"]
   }
 }
