@@ -260,23 +260,9 @@ function castToDevice(device, url, options = {}) {
     client.on('error', cleanup);
     client.connect(device.address, () => {
       if (isYouTubeUrl(url)) {
-        const videoId = extractYouTubeId(url);
+        const videoId = extractYouTubeId(url) || extractYouTubeId(options.referer || '');
         if (!videoId) {
-          // Fallback to default receiver if URL is a non-video YouTube page.
-          const castUrl = options.useProxy ? buildProxyUrl(url, options.referer) : url;
-          return client.launch(DefaultMediaReceiver, (err, player) => {
-            if (err) return cleanup(err);
-            const media = {
-              contentId: castUrl,
-              contentType: detectContentType(castUrl),
-              streamType: 'BUFFERED'
-            };
-            player.load(media, { autoplay: true }, loadErr => {
-              if (loadErr) return cleanup(loadErr);
-              sessions.set(device.address, { client, player, type: 'media' });
-              resolve();
-            });
-          });
+          return cleanup(new Error('YouTube video ID not found'));
         }
         client.launch(YouTubeApp, (err, app) => {
           if (err) return cleanup(err);
@@ -363,6 +349,7 @@ const server = http.createServer(async (req, res) => {
       const url = body.url;
       const useProxy = !!body.useProxy;
       const referer = body.referer || '';
+      console.log('[Cast] url=', url, 'referer=', referer, 'useProxy=', useProxy);
       if (!url) return json(res, 400, { error: 'Missing url' });
       let device = body.device;
       if (!device) {
