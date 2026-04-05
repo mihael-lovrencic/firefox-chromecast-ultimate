@@ -121,7 +121,12 @@ async function handleProxy(req, res) {
       return json(res, 400, { error: 'Invalid protocol' });
     }
 
-    const upstream = await proxyFetch(targetUrl.toString(), referer);
+    let upstream;
+    try {
+      upstream = await proxyFetch(targetUrl.toString(), referer);
+    } catch (err) {
+      return json(res, 502, { error: `Upstream fetch failed: ${err.message}` });
+    }
     const contentType = upstream.headers.get('content-type') || '';
 
     if (isM3U8(targetUrl.toString(), contentType)) {

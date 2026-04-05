@@ -3,20 +3,32 @@ let lastDevice = null;
 const NATIVE_HOST_NAME = 'chromecast_ultimate_helper';
 
 async function helperRequest(path, options = {}) {
-  const res = await fetch(`${HELPER_URL}${path}`, {
-    method: options.method || 'GET',
-    headers: options.headers || { 'Content-Type': 'application/json' },
-    body: options.body
-  });
-  if (!res.ok) {
-    let message = `HTTP ${res.status}`;
-    try {
-      const data = await res.json();
-      if (data && data.error) message = data.error;
-    } catch (_) {}
-    throw new Error(message);
+  const request = async () => {
+    const res = await fetch(`${HELPER_URL}${path}`, {
+      method: options.method || 'GET',
+      headers: options.headers || { 'Content-Type': 'application/json' },
+      body: options.body
+    });
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try {
+        const data = await res.json();
+        if (data && data.error) message = data.error;
+      } catch (_) {}
+      throw new Error(message);
+    }
+    return res.json();
+  };
+  try {
+    return await request();
+  } catch (e) {
+    if (e && e.message && e.message.includes('NetworkError')) {
+      await ensureHelperRunning();
+      await new Promise(r => setTimeout(r, 500));
+      return await request();
+    }
+    throw e;
   }
-  return res.json();
 }
 
 async function ensureHelperRunning() {
