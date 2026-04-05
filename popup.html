@@ -29,6 +29,8 @@
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .section { display: none; }
     .section.active { display: block; }
+    .control-btns { display: flex; gap: 5px; }
+    .control-btns button { flex: 1; padding: 6px; font-size: 11px; }
   </style>
 </head>
 <body>
@@ -36,7 +38,7 @@
   <div id="status" class="status">Initializing...</div>
 
   <div class="mode-toggle">
-    <button id="modeStandalone" class="active">Standalone Mode</button>
+    <button id="modeStandalone" class="active">Standalone</button>
     <button id="modeAndroid">Android App</button>
   </div>
 
@@ -64,10 +66,12 @@
   <button id="mirror">Mirror Tab</button>
 
   <hr>
-
-  <button onclick="control('play')">Play</button>
-  <button onclick="control('pause')">Pause</button>
-  <button onclick="control('stop')">Stop</button>
+  
+  <div class="control-btns">
+    <button id="playBtn">Play</button>
+    <button id="pauseBtn">Pause</button>
+    <button id="stopBtn">Stop</button>
+  </div>
 
   <label>Seek:</label>
   <input type="range" id="progress" min="0" max="100" value="0">
@@ -78,7 +82,7 @@
   <hr>
   <h4>Playlist Queue</h4>
   <div id="playlist"></div>
-  <button onclick="clearPlaylist()" style="background:#fbbc04; margin-top:5px;">Clear Playlist</button>
+  <button id="clearPlaylist" style="background:#fbbc04; margin-top:5px;">Clear Playlist</button>
 
   <script src="popup.js"></script>
 </body>

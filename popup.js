@@ -364,6 +364,10 @@ document.getElementById('mirror').onclick = async () => {
   }
 };
 
+document.getElementById('playBtn').onclick = () => control('play');
+document.getElementById('pauseBtn').onclick = () => control('pause');
+document.getElementById('stopBtn').onclick = () => control('stop');
+document.getElementById('clearPlaylist').onclick = clearPlaylist;
 document.getElementById('scanVideos').onclick = loadVideos;
 document.getElementById('discoverServer').onclick = discoverServer;
 
