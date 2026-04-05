@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chromecast Ultimate",
-  "version": "5.1.0",
+  "version": "5.1.1",
   "description": "Cast videos and mirror tabs to Chromecast devices directly from Firefox",
   "license": "MPL-2.0",
   "id": "chromecast-ultimate@firefox",
