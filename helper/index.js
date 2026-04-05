@@ -106,8 +106,14 @@ function isM3U8(url, contentType) {
 async function proxyFetch(targetUrl, referer, cookie, range) {
   const headers = {};
   if (referer) headers.Referer = referer;
+  if (referer) {
+    try {
+      headers.Origin = new URL(referer).origin;
+    } catch (_) {}
+  }
   if (cookie) headers.Cookie = cookie;
   if (range) headers.Range = range;
+  headers.Accept = '*/*';
   headers['User-Agent'] =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
   return fetch(targetUrl, { headers });
@@ -132,6 +138,7 @@ async function handleProxy(req, res) {
       return json(res, 502, { error: `Upstream fetch failed: ${err.message}` });
     }
     const contentType = upstream.headers.get('content-type') || '';
+    console.log('[Proxy]', targetUrl.toString(), 'status=', upstream.status, 'type=', contentType);
 
     if (isM3U8(targetUrl.toString(), contentType)) {
       const text = await upstream.text();
