@@ -23,15 +23,43 @@
       e.stopPropagation();
       console.log('[Chromecast] Cast button clicked!');
       btn.textContent = '...';
+      const videoUrl = video.currentSrc || video.src;
+      if (!videoUrl) {
+        btn.textContent = 'NO URL';
+        btn.style.background = '#f00';
+        setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 2000);
+        return;
+      }
       browser.runtime.sendMessage({ type: 'discoverDevices' }).then(devices => {
         if (!devices || devices.length === 0) {
           btn.textContent = 'NO';
           btn.style.background = '#f00';
           setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 2000);
         } else {
-          btn.textContent = 'OK';
-          btn.style.background = '#0f0';
-          console.log('[Chromecast] Found devices:', devices);
+          let device = devices[0];
+          if (devices.length > 1) {
+            const list = devices.map((d, i) => `${i + 1}. ${d.name || d.address}`).join('\n');
+            const choice = prompt(`Select Chromecast:\n${list}`, '1');
+            const index = parseInt(choice || '1', 10) - 1;
+            if (Number.isNaN(index) || index < 0 || index >= devices.length) {
+              btn.textContent = 'CANCEL';
+              btn.style.background = '#f00';
+              setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 2000);
+              return;
+            }
+            device = devices[index];
+          }
+          browser.runtime.sendMessage({ type: 'castVideo', videoUrl, device }).then(res => {
+            if (res && res.error) throw new Error(res.error);
+            btn.textContent = 'CASTING';
+            btn.style.background = '#34a853';
+            setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 3000);
+          }).catch(err => {
+            console.error('[Chromecast] Cast error:', err);
+            btn.textContent = 'ERR';
+            btn.style.background = '#f00';
+            setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 3000);
+          });
         }
       }).catch(e => {
         console.error('[Chromecast] Error:', e);
