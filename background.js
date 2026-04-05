@@ -119,12 +119,17 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const cookieForReferer = await getCookieHeader(message.referer || '');
         const cookieForMedia = await getCookieHeader(message.videoUrl || '');
         const cookie = mergeCookieHeaders(cookieForReferer, cookieForMedia);
+        let origin = '';
+        try {
+          origin = message.referer ? new URL(message.referer).origin : '';
+        } catch (_) {}
         const payload = {
           url: message.videoUrl,
           device,
           useProxy: !!message.useProxy,
           referer: message.referer || '',
-          cookie
+          cookie,
+          origin
         };
         await helperRequest('/cast', {
           method: 'POST',

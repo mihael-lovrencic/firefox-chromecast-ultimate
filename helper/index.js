@@ -91,10 +91,11 @@ function getLocalIp() {
   return null;
 }
 
-function buildProxyUrl(url, referer, cookie) {
+function buildProxyUrl(url, referer, cookie, origin) {
   const params = new URLSearchParams({ url });
   if (referer) params.set('referer', referer);
   if (cookie) params.set('cookie', cookie);
+  if (origin) params.set('origin', origin);
   return `http://${LOCAL_IP}:${PORT}/proxy?${params.toString()}`;
 }
 
@@ -103,14 +104,10 @@ function isM3U8(url, contentType) {
   return url.toLowerCase().includes('.m3u8');
 }
 
-async function proxyFetch(targetUrl, referer, cookie, range) {
+async function proxyFetch(targetUrl, referer, cookie, origin, range) {
   const headers = {};
   if (referer) headers.Referer = referer;
-  if (referer) {
-    try {
-      headers.Origin = new URL(referer).origin;
-    } catch (_) {}
-  }
+  if (origin) headers.Origin = origin;
   if (cookie) headers.Cookie = cookie;
   if (range) headers.Range = range;
   headers.Accept = '*/*';
@@ -125,6 +122,7 @@ async function handleProxy(req, res) {
     const target = reqUrl.searchParams.get('url');
     const referer = reqUrl.searchParams.get('referer') || '';
     const cookie = reqUrl.searchParams.get('cookie') || '';
+    const origin = reqUrl.searchParams.get('origin') || '';
     if (!target) return json(res, 400, { error: 'Missing url' });
     const targetUrl = new URL(target);
     if (!['http:', 'https:'].includes(targetUrl.protocol)) {
@@ -133,7 +131,7 @@ async function handleProxy(req, res) {
 
     let upstream;
     try {
-      upstream = await proxyFetch(targetUrl.toString(), referer, cookie, req.headers.range);
+      upstream = await proxyFetch(targetUrl.toString(), referer, cookie, origin, req.headers.range);
     } catch (err) {
       return json(res, 502, { error: `Upstream fetch failed: ${err.message}` });
     }
@@ -299,7 +297,7 @@ function castToDevice(device, url, options = {}) {
           });
         });
       } else {
-        const castUrl = options.useProxy ? buildProxyUrl(url, options.referer, options.cookie) : url;
+        const castUrl = options.useProxy ? buildProxyUrl(url, options.referer, options.cookie, options.origin) : url;
         console.log('[Cast] Using URL:', castUrl);
         client.launch(DefaultMediaReceiver, (err, player) => {
           if (err) return cleanup(err);
@@ -378,6 +376,7 @@ const server = http.createServer(async (req, res) => {
       const useProxy = !!body.useProxy;
       const referer = body.referer || '';
       const cookie = body.cookie || '';
+      const origin = body.origin || '';
       console.log('[Cast] url=', url, 'referer=', referer, 'useProxy=', useProxy);
       if (!url) return json(res, 400, { error: 'Missing url' });
       let device = body.device;
@@ -392,7 +391,7 @@ const server = http.createServer(async (req, res) => {
       if (!device) return json(res, 404, { error: 'No devices found' });
       if (!device.port) device.port = 8009;
       if (!device.address && device.host) device.address = device.host;
-      await castToDevice(device, url, { useProxy, referer, cookie });
+      await castToDevice(device, url, { useProxy, referer, cookie, origin });
       return json(res, 200, { success: true });
     } catch (e) {
       console.error('[Cast] Failed:', e?.message || e);
