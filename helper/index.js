@@ -277,7 +277,10 @@ function castToDevice(device, url, options = {}) {
       client.close();
       if (err) reject(err);
     };
-    client.on('error', cleanup);
+    client.on('error', (err) => {
+      console.error('[Cast] Client error:', err?.message || err);
+      cleanup(err);
+    });
     client.connect(device.address, () => {
       if (isYouTubeUrl(url)) {
         const videoId = extractYouTubeId(url) || extractYouTubeId(options.referer || '');
@@ -293,6 +296,7 @@ function castToDevice(device, url, options = {}) {
         });
       } else {
         const castUrl = options.useProxy ? buildProxyUrl(url, options.referer, options.cookie) : url;
+        console.log('[Cast] Using URL:', castUrl);
         client.launch(DefaultMediaReceiver, (err, player) => {
           if (err) return cleanup(err);
           const media = {
@@ -381,7 +385,8 @@ const server = http.createServer(async (req, res) => {
       await castToDevice(device, url, { useProxy, referer, cookie });
       return json(res, 200, { success: true });
     } catch (e) {
-      return json(res, 500, { error: e.message });
+      console.error('[Cast] Failed:', e?.message || e);
+      return json(res, 500, { error: e.message || 'Cast failed' });
     }
   }
 
