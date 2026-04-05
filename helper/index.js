@@ -310,6 +310,15 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { status: 'ok', version: '1.0.0', host: LOCAL_IP });
   }
 
+  if (req.method === 'GET' && req.url === '/ping') {
+    res.writeHead(200, {
+      'Content-Type': 'text/plain',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.end('pong');
+    return;
+  }
+
   if (req.method === 'GET' && req.url === '/devices') {
     const devices = await discoverDevices();
     return json(res, 200, devices);
