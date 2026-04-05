@@ -28,6 +28,9 @@
         const candidate = findCandidateUrl();
         if (candidate) videoUrl = candidate;
       }
+      if (videoUrl && /youtube\.com|youtu\.be/i.test(window.location.href)) {
+        videoUrl = window.location.href;
+      }
       if (!videoUrl) {
         btn.textContent = 'NO URL';
         btn.style.background = '#f00';
