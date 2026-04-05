@@ -1,8 +1,0 @@
-{
-  "version": {
-    "license": "MPL-2.0"
-  },
-  "release_notes": {
-    "en-US": "Fixed lint warnings, improved workflow"
-  }
-}
