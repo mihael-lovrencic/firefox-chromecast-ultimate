@@ -223,6 +223,10 @@ async function castToChromecast(url) {
         }
       } catch (_) {}
     }
+    if (!/youtube\.com|youtu\.be/i.test(finalUrl) && !finalUrl.includes('.m3u8') && !finalUrl.includes('.mp4')) {
+      setStatus('No stream URL captured. Play video for a few seconds, then cast.');
+      return;
+    }
     const useProxy = shouldProxy(url);
     const res = await browser.runtime.sendMessage({
       type: 'castVideo',

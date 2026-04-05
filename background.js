@@ -61,6 +61,24 @@ async function getCookieHeader(url) {
   }
 }
 
+function mergeCookieHeaders(...cookieStrings) {
+  const jar = new Map();
+  for (const cookieString of cookieStrings) {
+    if (!cookieString) continue;
+    cookieString.split(';').forEach(part => {
+      const trimmed = part.trim();
+      if (!trimmed) return;
+      const idx = trimmed.indexOf('=');
+      if (idx <= 0) return;
+      const name = trimmed.slice(0, idx);
+      const value = trimmed.slice(idx + 1);
+      jar.set(name, value);
+    });
+  }
+  if (jar.size === 0) return '';
+  return Array.from(jar.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'mediaUrl') {
     const tabId = sender?.tab?.id;
@@ -98,7 +116,9 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         await ensureHelperRunning();
         const device = message.device || lastDevice;
-        const cookie = await getCookieHeader(message.referer || '');
+        const cookieForReferer = await getCookieHeader(message.referer || '');
+        const cookieForMedia = await getCookieHeader(message.videoUrl || '');
+        const cookie = mergeCookieHeaders(cookieForReferer, cookieForMedia);
         const payload = {
           url: message.videoUrl,
           device,

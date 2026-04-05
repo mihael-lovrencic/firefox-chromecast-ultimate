@@ -64,6 +64,12 @@
       if (videoUrl && /youtube\.com|youtu\.be/i.test(window.location.href)) {
         videoUrl = window.location.href;
       }
+      if (!/youtube\.com|youtu\.be/i.test(videoUrl) && !videoUrl.includes('.m3u8') && !videoUrl.includes('.mp4')) {
+        btn.textContent = 'PLAY';
+        btn.style.background = '#fbbc04';
+        setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 2000);
+        return;
+      }
       if (!videoUrl) {
         btn.textContent = 'NO URL';
         btn.style.background = '#f00';
