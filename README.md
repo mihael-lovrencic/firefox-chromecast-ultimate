@@ -19,6 +19,15 @@ A Firefox extension for casting videos and mirroring tabs to Chromecast devices.
 Standalone mode requires a small local helper service. Firefox extensions cannot access raw TCP/UDP sockets needed by
 the Chromecast protocol, so the helper handles discovery and casting on your behalf.
 
+#### Optional: Auto-start helper via Native Messaging (Windows)
+You can let the extension start the helper automatically using a native host.
+
+1. Register the native host:
+```powershell
+powershell -ExecutionPolicy Bypass -File native-messaging\install-native-host.ps1
+```
+2. Firefox will now auto-start the helper when needed.
+
 #### Install helper (Windows/macOS/Linux)
 1. Ensure Node.js 18+ is installed.
 2. From `helper/`:
