@@ -3,7 +3,7 @@ let playlist = [];
 let serverUrl = localStorage.getItem('serverUrl') || '';
 let currentMode = localStorage.getItem('castMode') || 'standalone';
 let selectedDevice = null;
-const HELPER_URL = 'http://localhost:4269';
+const HELPER_URLS = ['http://localhost:4269', 'http://127.0.0.1:4269'];
 
 console.log('popup.js loaded!');
 
@@ -42,11 +42,20 @@ async function refreshHelperStatus() {
   if (helperStatusEl) helperStatusEl.textContent = 'Checking helper...';
   try {
     await browser.runtime.sendMessage({ type: 'ensureHelper' });
-    const res = await fetch(`${HELPER_URL}/status`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    if (helperStatusEl) helperStatusEl.textContent = 'Helper: running';
-    const devices = await fetch(`${HELPER_URL}/devices`).then(r => r.json());
-    if (helperDevicesEl) helperDevicesEl.textContent = `Helper devices: ${devices.length}`;
+    let lastError = null;
+    for (const base of HELPER_URLS) {
+      try {
+        const res = await fetch(`${base}/status`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (helperStatusEl) helperStatusEl.textContent = 'Helper: running';
+        const devices = await fetch(`${base}/devices`).then(r => r.json());
+        if (helperDevicesEl) helperDevicesEl.textContent = `Helper devices: ${devices.length}`;
+        return;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw lastError || new Error('Helper not reachable');
   } catch (e) {
     if (helperStatusEl) helperStatusEl.textContent = 'Helper: not reachable';
     if (helperDevicesEl) helperDevicesEl.textContent = '';

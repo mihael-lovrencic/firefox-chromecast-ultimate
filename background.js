@@ -1,10 +1,10 @@
-const HELPER_URL = 'http://localhost:4269';
+const HELPER_URLS = ['http://localhost:4269', 'http://127.0.0.1:4269'];
 let lastDevice = null;
 const NATIVE_HOST_NAME = 'chromecast_ultimate_helper';
 
 async function helperRequest(path, options = {}) {
-  const request = async () => {
-    const res = await fetch(`${HELPER_URL}${path}`, {
+  const request = async (baseUrl) => {
+    const res = await fetch(`${baseUrl}${path}`, {
       method: options.method || 'GET',
       headers: options.headers || { 'Content-Type': 'application/json' },
       body: options.body
@@ -19,16 +19,25 @@ async function helperRequest(path, options = {}) {
     }
     return res.json();
   };
-  try {
-    return await request();
-  } catch (e) {
-    if (e && e.message && e.message.includes('NetworkError')) {
-      await ensureHelperRunning();
-      await new Promise(r => setTimeout(r, 500));
-      return await request();
+
+  let lastError;
+  for (const base of HELPER_URLS) {
+    try {
+      return await request(base);
+    } catch (e) {
+      lastError = e;
+      if (e && e.message && e.message.includes('NetworkError')) {
+        await ensureHelperRunning();
+        await new Promise(r => setTimeout(r, 500));
+        try {
+          return await request(base);
+        } catch (e2) {
+          lastError = e2;
+        }
+      }
     }
-    throw e;
   }
+  throw lastError || new Error('Helper not reachable');
 }
 
 async function ensureHelperRunning() {
