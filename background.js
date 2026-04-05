@@ -39,6 +39,18 @@ async function ensureHelperRunning() {
   }
 }
 
+async function getCookieHeader(url) {
+  if (!url) return '';
+  try {
+    const cookies = await browser.cookies.getAll({ url });
+    if (!cookies || cookies.length === 0) return '';
+    return cookies.map(c => `${c.name}=${c.value}`).join('; ');
+  } catch (e) {
+    console.warn('[Cookies] Failed to read cookies:', e?.message || e);
+    return '';
+  }
+}
+
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'ensureHelper') {
     ensureHelperRunning()
@@ -60,11 +72,13 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         await ensureHelperRunning();
         const device = message.device || lastDevice;
+        const cookie = await getCookieHeader(message.referer || '');
         const payload = {
           url: message.videoUrl,
           device,
           useProxy: !!message.useProxy,
-          referer: message.referer || ''
+          referer: message.referer || '',
+          cookie
         };
         await helperRequest('/cast', {
           method: 'POST',

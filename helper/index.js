@@ -91,9 +91,10 @@ function getLocalIp() {
   return null;
 }
 
-function buildProxyUrl(url, referer) {
+function buildProxyUrl(url, referer, cookie) {
   const params = new URLSearchParams({ url });
   if (referer) params.set('referer', referer);
+  if (cookie) params.set('cookie', cookie);
   return `http://${LOCAL_IP}:${PORT}/proxy?${params.toString()}`;
 }
 
@@ -102,9 +103,11 @@ function isM3U8(url, contentType) {
   return url.toLowerCase().includes('.m3u8');
 }
 
-async function proxyFetch(targetUrl, referer) {
+async function proxyFetch(targetUrl, referer, cookie, range) {
   const headers = {};
   if (referer) headers.Referer = referer;
+  if (cookie) headers.Cookie = cookie;
+  if (range) headers.Range = range;
   headers['User-Agent'] =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
   return fetch(targetUrl, { headers });
@@ -115,6 +118,7 @@ async function handleProxy(req, res) {
     const reqUrl = new URL(req.url, `http://${req.headers.host}`);
     const target = reqUrl.searchParams.get('url');
     const referer = reqUrl.searchParams.get('referer') || '';
+    const cookie = reqUrl.searchParams.get('cookie') || '';
     if (!target) return json(res, 400, { error: 'Missing url' });
     const targetUrl = new URL(target);
     if (!['http:', 'https:'].includes(targetUrl.protocol)) {
@@ -123,7 +127,7 @@ async function handleProxy(req, res) {
 
     let upstream;
     try {
-      upstream = await proxyFetch(targetUrl.toString(), referer);
+      upstream = await proxyFetch(targetUrl.toString(), referer, cookie, req.headers.range);
     } catch (err) {
       return json(res, 502, { error: `Upstream fetch failed: ${err.message}` });
     }
@@ -149,10 +153,19 @@ async function handleProxy(req, res) {
       return;
     }
 
-    res.writeHead(upstream.status, {
+    const passthrough = {
       'Content-Type': contentType || 'application/octet-stream',
       'Access-Control-Allow-Origin': '*'
-    });
+    };
+    const acceptRanges = upstream.headers.get('accept-ranges');
+    const contentLength = upstream.headers.get('content-length');
+    const contentRange = upstream.headers.get('content-range');
+    const cacheControl = upstream.headers.get('cache-control');
+    if (acceptRanges) passthrough['Accept-Ranges'] = acceptRanges;
+    if (contentLength) passthrough['Content-Length'] = contentLength;
+    if (contentRange) passthrough['Content-Range'] = contentRange;
+    if (cacheControl) passthrough['Cache-Control'] = cacheControl;
+    res.writeHead(upstream.status, passthrough);
     if (upstream.body) {
       const nodeStream = Readable.fromWeb(upstream.body);
       nodeStream.pipe(res);
@@ -272,7 +285,7 @@ function castToDevice(device, url, options = {}) {
           });
         });
       } else {
-        const castUrl = options.useProxy ? buildProxyUrl(url, options.referer) : url;
+        const castUrl = options.useProxy ? buildProxyUrl(url, options.referer, options.cookie) : url;
         client.launch(DefaultMediaReceiver, (err, player) => {
           if (err) return cleanup(err);
           const media = {
@@ -349,6 +362,7 @@ const server = http.createServer(async (req, res) => {
       const url = body.url;
       const useProxy = !!body.useProxy;
       const referer = body.referer || '';
+      const cookie = body.cookie || '';
       console.log('[Cast] url=', url, 'referer=', referer, 'useProxy=', useProxy);
       if (!url) return json(res, 400, { error: 'Missing url' });
       let device = body.device;
@@ -357,7 +371,7 @@ const server = http.createServer(async (req, res) => {
         device = devices[0];
       }
       if (!device) return json(res, 404, { error: 'No devices found' });
-      await castToDevice(device, url, { useProxy, referer });
+      await castToDevice(device, url, { useProxy, referer, cookie });
       return json(res, 200, { success: true });
     } catch (e) {
       return json(res, 500, { error: e.message });
