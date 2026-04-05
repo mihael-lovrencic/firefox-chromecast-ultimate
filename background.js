@@ -40,6 +40,13 @@ async function ensureHelperRunning() {
 }
 
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'ensureHelper') {
+    ensureHelperRunning()
+      .then(() => sendResponse({ ok: true }))
+      .catch(e => sendResponse({ error: e.message }));
+    return true;
+  }
+
   if (message.type === 'discoverDevices') {
     ensureHelperRunning()
       .then(() => helperRequest('/devices'))

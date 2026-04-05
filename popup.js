@@ -40,6 +40,7 @@ async function refreshHelperStatus() {
   if (currentMode !== 'standalone') return;
   if (helperStatusEl) helperStatusEl.textContent = 'Checking helper...';
   try {
+    await browser.runtime.sendMessage({ type: 'ensureHelper' });
     const res = await fetch(`${HELPER_URL}/status`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     if (helperStatusEl) helperStatusEl.textContent = 'Helper: running';
