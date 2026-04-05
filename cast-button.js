@@ -162,7 +162,8 @@
   window.addEventListener('message', (event) => {
     if (event.source !== window) return;
     if (event.data?.type === 'chromecast-url' && event.data.url) {
-      capturedUrls.push(event.data.url);
+      const extracted = extractMediaUrl(event.data.url) || event.data.url;
+      capturedUrls.push(extracted);
     }
   });
   installUrlSniffer();
@@ -186,6 +187,42 @@
     } catch (_) {
       return null;
     }
+  }
+
+  function extractMediaUrl(raw) {
+    try {
+      if (!raw || typeof raw !== 'string') return null;
+      if (raw.includes('.m3u8') || raw.includes('.mp4')) {
+        const url = tryExtractFromQuery(raw);
+        return url || raw;
+      }
+      return tryExtractFromQuery(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function tryExtractFromQuery(raw) {
+    try {
+      const u = new URL(raw);
+      for (const [key, value] of u.searchParams.entries()) {
+        const candidate = decodeURIComponent(value);
+        if (candidate.includes('.m3u8') || candidate.includes('.mp4')) return candidate;
+        if (looksBase64(candidate)) {
+          const decoded = atob(candidate.replace(/[-_]/g, '+').replace(/ /g, '+'));
+          if (decoded.includes('.m3u8') || decoded.includes('.mp4')) return decoded;
+        }
+        if (looksBase64(value)) {
+          const decoded = atob(value.replace(/[-_]/g, '+').replace(/ /g, '+'));
+          if (decoded.includes('.m3u8') || decoded.includes('.mp4')) return decoded;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function looksBase64(val) {
+    return typeof val === 'string' && val.length >= 8 && /^[A-Za-z0-9+/=_-]+$/.test(val);
   }
   
 })();
