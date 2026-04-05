@@ -21,7 +21,9 @@ jobs:
         run: npm install -g web-ext
 
       - name: Build extension
-        run: npx web-ext build
+        run: |
+          rm -rf web-ext-artifacts
+          npx web-ext build --overwrite-dest
 
       - name: Submit to AMO (listed/public)
         run: |

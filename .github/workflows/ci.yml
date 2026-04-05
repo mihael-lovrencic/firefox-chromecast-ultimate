@@ -45,7 +45,9 @@ jobs:
         run: npm install -g web-ext
 
       - name: Build extension
-        run: npx web-ext build
+        run: |
+          rm -rf web-ext-artifacts
+          npx web-ext build --overwrite-dest
 
       - name: Compute short SHA
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV

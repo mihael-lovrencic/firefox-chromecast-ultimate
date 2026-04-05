@@ -36,7 +36,9 @@ jobs:
         run: npm install -g web-ext
 
       - name: Build extension
-        run: npx web-ext build
+        run: |
+          rm -rf web-ext-artifacts
+          npx web-ext build --overwrite-dest
 
       - name: Upload to Release
         env:
@@ -69,7 +71,9 @@ jobs:
           sudo apt-get install -y gh
 
       - name: Build extension
-        run: npx web-ext build
+        run: |
+          rm -rf web-ext-artifacts
+          npx web-ext build --overwrite-dest
 
       - name: Get version from manifest
         id: version
