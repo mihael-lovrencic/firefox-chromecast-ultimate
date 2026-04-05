@@ -1,0 +1,41 @@
+name: Local Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_ip:
+        description: 'Optional Chromecast IP to target'
+        required: false
+        default: ''
+      device_name:
+        description: 'Optional Chromecast name substring to target'
+        required: false
+        default: ''
+      cast_test_url:
+        description: 'Optional media URL to cast'
+        required: false
+        default: ''
+
+jobs:
+  smoke:
+    runs-on: self-hosted
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      DEVICE_IP: ${{ inputs.device_ip }}
+      DEVICE_NAME: ${{ inputs.device_name }}
+      CAST_TEST_URL: ${{ inputs.cast_test_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install helper deps
+        working-directory: helper
+        run: npm install
+
+      - name: Run helper smoke test
+        working-directory: helper
+        run: npm run smoke
