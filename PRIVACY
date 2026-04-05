@@ -1,0 +1,44 @@
+Privacy Policy
+
+Last Updated: April 2024
+
+1. DATA COLLECTION
+
+Firefox Chromecast Ultimate ("the Extension") does not collect, store, or transmit any personal information to external servers. All data processing occurs locally on your device.
+
+2. LOCAL NETWORK DATA
+
+The Extension communicates with the ChromecastUltimate Android application on your local network to discover and control Chromecast devices. This communication stays within your local network and is not transmitted externally.
+
+3. DATA USAGE
+
+The Extension processes the following data locally:
+- Current tab URL (when casting)
+- Device discovery results from local network
+- Server connection settings (stored locally in your browser)
+
+4. THIRD-PARTY DISCLOSURE
+
+We do not share, sell, or transfer any personal information to third parties. The Extension only communicates with the ChromecastUltimate Android app that you install on your own device.
+
+5. COOKIES
+
+The Extension does not use cookies or similar tracking technologies.
+
+6. DATA SECURITY
+
+You are responsible for securing your local network and ensuring only trusted devices have access. The Extension connects to devices on your local network based on your configuration.
+
+7. CHILDREN'S PRIVACY
+
+The Extension is not intended for use by children under 13. We do not knowingly collect personal information from children.
+
+8. CHANGES TO POLICY
+
+We may update this Privacy Policy from time to time. Any changes will be reflected in the "Last Updated" date above.
+
+9. CONTACT
+
+For questions about this Privacy Policy, please contact the Developer through the extension's support channels.
+
+By using the Extension, you acknowledge that you have read and understood this Privacy Policy.
