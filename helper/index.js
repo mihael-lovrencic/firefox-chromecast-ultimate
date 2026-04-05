@@ -165,17 +165,21 @@ async function handleProxy(req, res) {
 }
 
 function isYouTubeUrl(url) {
-  return /(^https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test(url);
+  return /(^https?:\/\/)?(www\.)?(m\.)?(music\.)?(youtube\.com|youtu\.be)\//i.test(url);
 }
 
 function extractYouTubeId(url) {
   try {
-    const u = new URL(url);
+    let input = url.trim();
+    if (input.startsWith('//')) input = `https:${input}`;
+    if (input.startsWith('www.')) input = `https://${input}`;
+    const u = new URL(input);
     if (u.hostname.includes('youtu.be')) {
       return u.pathname.replace('/', '');
     }
     if (u.hostname.includes('youtube.com')) {
       if (u.searchParams.get('v')) return u.searchParams.get('v');
+      if (u.searchParams.get('V')) return u.searchParams.get('V');
       const parts = u.pathname.split('/');
       const embedIndex = parts.indexOf('embed');
       if (embedIndex >= 0 && parts[embedIndex + 1]) return parts[embedIndex + 1];
@@ -183,6 +187,10 @@ function extractYouTubeId(url) {
       if (shortsIndex >= 0 && parts[shortsIndex + 1]) return parts[shortsIndex + 1];
     }
   } catch (_) {}
+  const match = url.match(/[?&]v=([^&]+)/i);
+  if (match && match[1]) return match[1];
+  const short = url.match(/youtu\.be\/([^?&]+)/i);
+  if (short && short[1]) return short[1];
   return null;
 }
 
