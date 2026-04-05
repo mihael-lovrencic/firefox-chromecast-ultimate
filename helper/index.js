@@ -253,7 +253,23 @@ function castToDevice(device, url, options = {}) {
     client.connect(device.address, () => {
       if (isYouTubeUrl(url)) {
         const videoId = extractYouTubeId(url);
-        if (!videoId) return cleanup(new Error('Invalid YouTube URL'));
+        if (!videoId) {
+          // Fallback to default receiver if URL is a non-video YouTube page.
+          const castUrl = options.useProxy ? buildProxyUrl(url, options.referer) : url;
+          return client.launch(DefaultMediaReceiver, (err, player) => {
+            if (err) return cleanup(err);
+            const media = {
+              contentId: castUrl,
+              contentType: detectContentType(castUrl),
+              streamType: 'BUFFERED'
+            };
+            player.load(media, { autoplay: true }, loadErr => {
+              if (loadErr) return cleanup(loadErr);
+              sessions.set(device.address, { client, player, type: 'media' });
+              resolve();
+            });
+          });
+        }
         client.launch(YouTubeApp, (err, app) => {
           if (err) return cleanup(err);
           app.load(videoId, () => {
