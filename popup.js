@@ -15,6 +15,8 @@ const playlistContainer = document.getElementById('playlist');
 const serverInput = document.getElementById('serverUrl');
 const discoveredDevicesContainer = document.getElementById('discoveredDevices');
 if (!discoveredDevicesContainer) console.error('discoveredDevices element not found!');
+const helperStatusEl = document.getElementById('helperStatus');
+const helperDevicesEl = document.getElementById('helperDevices');
 
 const REQUEST_TIMEOUT = 5000;
 
@@ -34,6 +36,21 @@ function setStatus(msg) {
   statusEl.textContent = msg;
 }
 
+async function refreshHelperStatus() {
+  if (currentMode !== 'standalone') return;
+  if (helperStatusEl) helperStatusEl.textContent = 'Checking helper...';
+  try {
+    const res = await fetch(`${HELPER_URL}/status`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (helperStatusEl) helperStatusEl.textContent = 'Helper: running';
+    const devices = await fetch(`${HELPER_URL}/devices`).then(r => r.json());
+    if (helperDevicesEl) helperDevicesEl.textContent = `Helper devices: ${devices.length}`;
+  } catch (e) {
+    if (helperStatusEl) helperStatusEl.textContent = 'Helper: not reachable';
+    if (helperDevicesEl) helperDevicesEl.textContent = '';
+  }
+}
+
 function setMode(mode) {
   currentMode = mode;
   localStorage.setItem('castMode', mode);
@@ -45,6 +62,7 @@ function setMode(mode) {
   
   if (mode === 'standalone') {
     setStatus('Standalone mode - scanning for Chromecasts...');
+    refreshHelperStatus();
     scanForChromecasts();
   } else {
     setStatus('Android mode - connecting to server...');
@@ -405,3 +423,4 @@ if (serverUrlInput) {
 
 setMode(currentMode);
 setTimeout(loadVideos, 500);
+setInterval(refreshHelperStatus, 4000);
