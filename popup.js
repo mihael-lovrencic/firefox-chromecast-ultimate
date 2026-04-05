@@ -73,7 +73,14 @@ async function scanForChromecasts() {
     devices.forEach(device => {
       const div = document.createElement('div');
       div.className = 'discovered-device';
-      div.innerHTML = `<strong>${device.name || device.address}</strong><br><small>${device.address}</small>`;
+      const nameEl = document.createElement('strong');
+      nameEl.textContent = device.name || device.address;
+      const br = document.createElement('br');
+      const small = document.createElement('small');
+      small.textContent = device.address;
+      div.appendChild(nameEl);
+      div.appendChild(br);
+      div.appendChild(small);
       div.onclick = () => selectDevice(device);
       discoveredDevicesContainer.appendChild(div);
     });
