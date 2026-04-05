@@ -382,6 +382,8 @@ const server = http.createServer(async (req, res) => {
         device = devices[0];
       }
       if (!device) return json(res, 404, { error: 'No devices found' });
+      if (!device.port) device.port = 8009;
+      if (!device.address && device.host) device.address = device.host;
       await castToDevice(device, url, { useProxy, referer, cookie });
       return json(res, 200, { success: true });
     } catch (e) {
