@@ -3,6 +3,7 @@ name: Submit to AMO
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   amo:
