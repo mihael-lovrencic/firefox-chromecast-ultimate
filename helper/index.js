@@ -272,6 +272,9 @@ YouTubeApp.APP_ID = '233637DE';
 
 function castToDevice(device, url, options = {}) {
   return new Promise((resolve, reject) => {
+    if (!device || !device.address) {
+      return reject(new Error('Device address missing'));
+    }
     const client = new Client();
     const cleanup = (err) => {
       client.close();
@@ -281,7 +284,8 @@ function castToDevice(device, url, options = {}) {
       console.error('[Cast] Client error:', err?.message || err);
       cleanup(err);
     });
-    client.connect(device.address, () => {
+    const port = device.port || 8009;
+    client.connect(device.address, port, () => {
       if (isYouTubeUrl(url)) {
         const videoId = extractYouTubeId(url) || extractYouTubeId(options.referer || '');
         if (!videoId) {
