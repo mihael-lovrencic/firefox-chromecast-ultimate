@@ -38,20 +38,12 @@ jobs:
       - name: Build extension
         run: npx web-ext build
 
-      - name: Find and rename built file
-        run: |
-          ZIP_FILE=$(ls web-ext-artifacts/*.zip)
-          cp "$ZIP_FILE" "firefox-chromecast-ultimate-${{ github.event.release.tag_name }}.xpi"
-
       - name: Upload to Release
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: firefox-chromecast-ultimate-${{ github.event.release.tag_name }}.xpi
-          asset_name: firefox-chromecast-ultimate-${{ github.event.release.tag_name }}.xpi
-          asset_content_type: application/x-xpinstall
+        run: |
+          ZIP_FILE=$(ls web-ext-artifacts/*.zip | head -1)
+          gh release upload ${{ github.event.release.tag_name }} "$ZIP_FILE" --clobber
 
   build-on-push:
     if: github.event_name == 'push'
@@ -71,6 +63,11 @@ jobs:
       - name: Install web-ext
         run: npm install -g web-ext
 
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
+
       - name: Build extension
         run: npx web-ext build
 
@@ -81,26 +78,18 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ steps.version.outputs.VERSION }}
-          release_name: v${{ steps.version.outputs.VERSION }}
-          draft: true
-          prerelease: false
-
-      - name: Find and rename built file
         run: |
-          ZIP_FILE=$(ls web-ext-artifacts/*.zip)
-          cp "$ZIP_FILE" "firefox-chromecast-ultimate-v${{ steps.version.outputs.VERSION }}.xpi"
+          gh release create v${{ steps.version.outputs.VERSION }} \
+            --title "v${{ steps.version.outputs.VERSION }}" \
+            --draft \
+            --notes "Extension build v${{ steps.version.outputs.VERSION }}"
 
       - name: Upload to Release
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: firefox-chromecast-ultimate-v${{ steps.version.outputs.VERSION }}.xpi
-          asset_name: firefox-chromecast-ultimate-v${{ steps.version.outputs.VERSION }}.xpi
-          asset_content_type: application/x-xpinstall
+        run: |
+          ZIP_FILE=$(ls web-ext-artifacts/*.zip | head -1)
+          cp "$ZIP_FILE" "firefox-chromecast-ultimate-v${{ steps.version.outputs.VERSION }}.xpi"
+          gh release upload v${{ steps.version.outputs.VERSION }} "firefox-chromecast-ultimate-v${{ steps.version.outputs.VERSION }}.xpi" --clobber
