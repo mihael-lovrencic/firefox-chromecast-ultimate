@@ -29,7 +29,9 @@
     "http://192.168.0.0/16/*",
     "http://10.0.0.0/8/*",
     "http://172.16.0.0/12/*",
-    "http://localhost:5000/*"
+    "http://localhost:5000/*",
+    "http://127.0.0.1:4269/*",
+    "http://localhost:4269/*"
   ],
   "browser_specific_settings": {
     "gecko": {

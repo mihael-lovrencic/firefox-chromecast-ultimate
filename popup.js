@@ -3,6 +3,7 @@ let playlist = [];
 let serverUrl = localStorage.getItem('serverUrl') || '';
 let currentMode = localStorage.getItem('castMode') || 'standalone';
 let selectedDevice = null;
+const HELPER_URL = 'http://127.0.0.1:4269';
 
 console.log('popup.js loaded!');
 
@@ -69,6 +70,9 @@ async function scanForChromecasts() {
   try {
     log('Sending message to background script...');
     const devices = await browser.runtime.sendMessage({ type: 'discoverDevices' });
+    if (devices && devices.error) {
+      throw new Error(devices.error);
+    }
     log('Got response: ' + JSON.stringify(devices));
     
     discoveredDevicesContainer.innerHTML = '';
@@ -108,7 +112,7 @@ async function scanForChromecasts() {
     }
   } catch (e) {
     console.error('Discovery error:', e);
-    setStatus('Discovery failed: ' + e.message);
+    setStatus('Discovery failed: ' + e.message + '. Start helper on this device.');
     log('ERROR: ' + e.message);
   }
 }
@@ -137,15 +141,16 @@ async function castToChromecast(url) {
   }
   
   try {
-    await browser.runtime.sendMessage({
+    const res = await browser.runtime.sendMessage({
       type: 'castVideo',
       videoUrl: url,
       device: selectedDevice
     });
+    if (res && res.error) throw new Error(res.error);
     setStatus(`Casting to ${selectedDevice.name || selectedDevice.address}`);
   } catch (e) {
     console.error('Cast error:', e);
-    setStatus('Cast failed: ' + e.message);
+    setStatus('Cast failed: ' + e.message + '. Is helper running?');
   }
 }
 

@@ -1,10 +1,10 @@
 # Firefox Chromecast Ultimate
 
-A Firefox extension for casting videos and mirroring tabs to Chromecast devices. Works **standalone** (no external app needed) or with the ChromecastUltimate Android app.
+A Firefox extension for casting videos and mirroring tabs to Chromecast devices. Works in **Standalone mode** with a local helper or with the ChromecastUltimate Android app.
 
 ## Features
 
-- **Standalone Mode** - Cast directly to Chromecast without any external app
+- **Standalone Mode** - Cast directly to Chromecast using a local helper service
 - **Cast Button Overlay** - Cast button appears on videos automatically
 - **Device Discovery** - Auto-discovers Chromecast devices on your network
 - **Video Casting** - Cast videos from any webpage to your Chromecast
@@ -15,8 +15,18 @@ A Firefox extension for casting videos and mirroring tabs to Chromecast devices.
 
 ## Two Modes
 
-### Standalone Mode (No App Required)
-The extension discovers Chromecast devices directly and casts using the standard Cast protocol. No external server needed.
+### Standalone Mode (Helper Required)
+Standalone mode requires a small local helper service. Firefox extensions cannot access raw TCP/UDP sockets needed by
+the Chromecast protocol, so the helper handles discovery and casting on your behalf.
+
+#### Install helper (Windows/macOS/Linux)
+1. Ensure Node.js 18+ is installed.
+2. From `helper/`:
+```bash
+npm install
+npm run start
+```
+3. Leave it running. It listens on `http://127.0.0.1:4269`.
 
 ### Android App Mode
 For advanced features like tab mirroring, use the [ChromecastUltimate](https://github.com/mihael-lovrencic/ChromecastUltimate) Android app as a backend server.
@@ -41,10 +51,11 @@ Available on [Firefox Add-ons](https://addons.mozilla.org/addon/chromecast-ultim
 ## Usage
 
 ### Standalone Mode (Default)
-1. Open the Firefox extension popup
-2. Click "Scan for Chromecasts"
-3. Select your Chromecast device
-4. Cast videos directly - no app needed!
+1. Start the helper service (`helper/`)
+2. Open the Firefox extension popup
+3. Click "Scan for Chromecasts"
+4. Select your Chromecast device
+5. Cast videos directly
 
 ### Android App Mode
 1. Start the ChromecastUltimate Android app and enable the server
