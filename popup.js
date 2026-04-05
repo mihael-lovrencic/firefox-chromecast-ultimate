@@ -1,55 +1,27 @@
 let currentSession = null;
 let playlist = [];
 let serverUrl = localStorage.getItem('serverUrl') || '';
-let discoveredServerUrl = '';
+let currentMode = localStorage.getItem('castMode') || 'standalone';
+let selectedDevice = null;
 
 const statusEl = document.getElementById('status');
-const lastSeenEl = document.getElementById('lastSeen');
 const devicesSelect = document.getElementById('devices');
 const videosContainer = document.getElementById('videos');
 const playlistContainer = document.getElementById('playlist');
 const serverInput = document.getElementById('serverUrl');
-const progressInput = document.getElementById('progress');
-const volumeInput = document.getElementById('volume');
-const downloadAppBtn = document.getElementById('downloadApp');
-const useLocalhostBtn = document.getElementById('useLocalhost');
+const discoveredDevicesContainer = document.getElementById('discoveredDevices');
 
 const REQUEST_TIMEOUT = 5000;
-const APP_DOWNLOAD_URL = 'https://github.com/mihael-lovrencic/ChromecastUltimate/releases';
-const STATUS_POLL_INTERVAL = 4000;
-const STATUS_FAILS_BEFORE_DOWNLOAD = 2;
-
-let statusPollTimer = null;
-let statusInFlight = false;
-let statusFailCount = 0;
-let lastSeenAt = 0;
-let selectedDevice = localStorage.getItem('selectedDevice') || '';
 
 function validateServerUrl(url) {
   if (!url || typeof url !== 'string') return false;
   try {
     const parsed = new URL(url);
-    const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
-    const isPrivateIp =
-      parsed.hostname.match(/^(\d{1,3}\.){3}\d{1,3}$/) ||
-      parsed.hostname.match(/^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[0-1])/);
-    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
-           (isLocalhost || isPrivateIp);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && 
+           (parsed.hostname.match(/^(\d{1,3}\.){3}\d{1,3}$/) || 
+            parsed.hostname.match(/^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[0-1])/));
   } catch {
     return false;
-  }
-}
-
-async function fetchWithTimeout(url, options = {}, timeout = REQUEST_TIMEOUT) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    clearTimeout(id);
-    return response;
-  } catch (error) {
-    clearTimeout(id);
-    throw error;
   }
 }
 
@@ -57,46 +29,100 @@ function setStatus(msg) {
   statusEl.textContent = msg;
 }
 
-function updateLastSeen(ts) {
-  if (!lastSeenEl) return;
-  if (!ts) {
-    lastSeenEl.style.display = 'none';
+function setMode(mode) {
+  currentMode = mode;
+  localStorage.setItem('castMode', mode);
+  
+  document.getElementById('modeStandalone').classList.toggle('active', mode === 'standalone');
+  document.getElementById('modeAndroid').classList.toggle('active', mode === 'android');
+  document.getElementById('standaloneSection').classList.toggle('active', mode === 'standalone');
+  document.getElementById('androidSection').classList.toggle('active', mode === 'android');
+  
+  if (mode === 'standalone') {
+    setStatus('Standalone mode - scanning for Chromecasts...');
+    scanForChromecasts();
+  } else {
+    setStatus('Android mode - connecting to server...');
+    loadDevices();
+  }
+}
+
+document.getElementById('modeStandalone').onclick = () => setMode('standalone');
+document.getElementById('modeAndroid').onclick = () => setMode('android');
+
+async function scanForChromecasts() {
+  setStatus('Scanning for Chromecasts...');
+  discoveredDevicesContainer.innerHTML = '<button id="scanDevices" style="background:#34a853;">Scan for Chromecasts</button>';
+  document.getElementById('scanDevices').onclick = scanForChromecasts;
+  
+  try {
+    const devices = await browser.runtime.sendMessage({ type: 'discoverDevices' });
+    
+    discoveredDevicesContainer.innerHTML = '';
+    
+    if (!devices || devices.length === 0) {
+      setStatus('No Chromecasts found. Click scan to retry.');
+      const btn = document.createElement('button');
+      btn.style.background = '#34a853';
+      btn.textContent = 'Scan for Chromecasts';
+      btn.onclick = scanForChromecasts;
+      discoveredDevicesContainer.appendChild(btn);
+      return;
+    }
+    
+    devices.forEach(device => {
+      const div = document.createElement('div');
+      div.className = 'discovered-device';
+      div.innerHTML = `<strong>${device.name || device.address}</strong><br><small>${device.address}</small>`;
+      div.onclick = () => selectDevice(device);
+      discoveredDevicesContainer.appendChild(div);
+    });
+    
+    setStatus(`Found ${devices.length} Chromecast(s)`);
+    
+    if (devices.length === 1) {
+      selectDevice(devices[0]);
+    }
+  } catch (e) {
+    console.error('Discovery error:', e);
+    setStatus('Discovery failed. Click scan to retry.');
+  }
+}
+
+async function selectDevice(device) {
+  selectedDevice = device;
+  setStatus(`Selected: ${device.name || device.address}`);
+  
+  document.querySelectorAll('.discovered-device').forEach(el => {
+    el.style.background = '#e8f0fe';
+  });
+  
+  const selectedEl = Array.from(document.querySelectorAll('.discovered-device')).find(el => 
+    el.textContent.includes(device.address)
+  );
+  if (selectedEl) {
+    selectedEl.style.background = '#34a853';
+    selectedEl.style.color = 'white';
+  }
+}
+
+async function castToChromecast(url) {
+  if (!selectedDevice) {
+    setStatus('Select a Chromecast first');
     return;
   }
-  const agoSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-  const text = agoSec < 60 ? `${agoSec}s ago` : `${Math.floor(agoSec / 60)}m ago`;
-  lastSeenEl.textContent = `Last seen: ${text}`;
-  lastSeenEl.style.display = 'block';
-}
-
-function setDownloadVisible(visible) {
-  if (!downloadAppBtn) return;
-  downloadAppBtn.style.display = visible ? 'block' : 'none';
-}
-
-function bumpStatusFail() {
-  statusFailCount += 1;
-  if (statusFailCount >= STATUS_FAILS_BEFORE_DOWNLOAD) {
-    setDownloadVisible(true);
+  
+  try {
+    await browser.runtime.sendMessage({
+      type: 'castVideo',
+      videoUrl: url,
+      device: selectedDevice
+    });
+    setStatus(`Casting to ${selectedDevice.name || selectedDevice.address}`);
+  } catch (e) {
+    console.error('Cast error:', e);
+    setStatus('Cast failed: ' + e.message);
   }
-}
-
-function resetStatusFail() {
-  statusFailCount = 0;
-  setDownloadVisible(false);
-  lastSeenAt = Date.now();
-  updateLastSeen(lastSeenAt);
-}
-
-function updateServerUrl(url) {
-  if (!validateServerUrl(url)) {
-    setStatus('Invalid server URL. Use local IP (192.168.x.x or 10.x.x.x)');
-    return;
-  }
-  serverUrl = url;
-  localStorage.setItem('serverUrl', url);
-  loadDevices();
-  refreshStatus();
 }
 
 async function discoverServer() {
@@ -104,22 +130,17 @@ async function discoverServer() {
   try {
     const services = await getMDNSServices();
     if (services.length > 0) {
-      discoveredServerUrl = `http://${services[0].addresses[0]}:5000`;
-      if (!validateServerUrl(discoveredServerUrl)) {
-        setStatus('Found server but IP not in private range');
-        return;
-      }
-      serverUrl = discoveredServerUrl;
+      serverUrl = `http://${services[0].addresses[0]}:5000`;
       localStorage.setItem('serverUrl', serverUrl);
       if (serverInput) serverInput.value = serverUrl;
       setStatus(`Found server at ${services[0].addresses[0]}`);
       loadDevices();
     } else {
-      setStatus('No server found. Enter IP manually (e.g. http://192.168.x.x:5000 or http://127.0.0.1:5000).');
+      setStatus('No server found. Enter IP manually.');
     }
   } catch (e) {
     console.error('Discovery error:', e);
-    setStatus('Discovery failed. Enter IP manually (e.g. http://192.168.x.x:5000 or http://127.0.0.1:5000).');
+    setStatus('Discovery failed. Enter IP manually.');
   }
 }
 
@@ -128,7 +149,7 @@ async function getMDNSServices() {
   
   const checkUrl = async (ip) => {
     try {
-      await fetchWithTimeout(`http://${ip}:5000/status`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' }, 2000);
+      await fetch(`http://${ip}:5000/status`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' });
       return ip;
     } catch (e) {
       return null;
@@ -181,16 +202,15 @@ async function loadDevices() {
     return;
   }
   try {
-    const res = await fetchWithTimeout(`${serverUrl}/devices`, {}, 10000);
+    const res = await fetch(`${serverUrl}/devices`);
     const devices = await res.json();
     devicesSelect.innerHTML = '';
-    resetStatusFail();
     if (devices.length === 0) {
       const opt = document.createElement('option');
       opt.value = '';
       opt.textContent = 'No devices found';
       devicesSelect.appendChild(opt);
-      setStatus('No Chromecast devices found. Make sure server is running.');
+      setStatus('No Chromecast devices found.');
     } else {
       devices.forEach(d => {
         const opt = document.createElement('option');
@@ -198,50 +218,11 @@ async function loadDevices() {
         opt.textContent = d.name || d.address;
         devicesSelect.appendChild(opt);
       });
-      if (selectedDevice && devices.some(d => d.address === selectedDevice)) {
-        devicesSelect.value = selectedDevice;
-      } else if (devices.length === 1) {
-        devicesSelect.value = devices[0].address;
-        selectedDevice = devices[0].address;
-        localStorage.setItem('selectedDevice', selectedDevice);
-      }
       setStatus(`Found ${devices.length} device(s)`);
     }
   } catch (e) {
-    setStatus('Server not running. Start the server in the Android app.');
+    setStatus('Server not running. Start server.js first.');
     devicesSelect.innerHTML = '<option value="">Server not connected</option>';
-    bumpStatusFail();
-  }
-}
-
-async function refreshStatus() {
-  if (!serverUrl || !validateServerUrl(serverUrl)) return;
-  if (statusInFlight) return;
-  statusInFlight = true;
-  try {
-    const res = await fetchWithTimeout(`${serverUrl}/status`, {}, 5000);
-    const status = await res.json();
-    resetStatusFail();
-
-    if (typeof status.volume === 'number' && volumeInput) {
-      volumeInput.value = Math.round(status.volume * 100);
-    }
-
-    if (typeof status.durationMs === 'number' && status.durationMs > 0 && progressInput) {
-      progressInput.max = status.durationMs;
-      const position = typeof status.positionMs === 'number' ? status.positionMs : 0;
-      progressInput.value = Math.min(position, status.durationMs);
-    }
-
-    if (status.connected === false) {
-      setStatus('Not connected to Chromecast. Open the app to connect.');
-    }
-  } catch (e) {
-    // Ignore status errors; server might not be running yet.
-    bumpStatusFail();
-    updateLastSeen(lastSeenAt);
-  } finally {
-    statusInFlight = false;
   }
 }
 
@@ -267,9 +248,15 @@ async function loadVideos() {
         btn.className = 'video-btn';
         btn.textContent = `Cast: ${video.src.substring(0, 50)}...`;
         btn.onclick = () => {
-          playlist.push(video.src);
-          cast(video.src);
-          updatePlaylist();
+          if (currentMode === 'standalone') {
+            playlist.push(video.src);
+            castToChromecast(video.src);
+            updatePlaylist();
+          } else {
+            playlist.push(video.src);
+            cast(video.src);
+            updatePlaylist();
+          }
         };
         videosContainer.appendChild(btn);
       });
@@ -299,95 +286,40 @@ async function cast(url) {
     setStatus('Enter valid server URL first');
     return;
   }
-  const device = devicesSelect.value;
-  if (!device) {
-    setStatus('Please select a device first');
-    return;
-  }
   try {
-    const res = await fetchWithTimeout(`${serverUrl}/cast`, {
+    const res = await fetch(`${serverUrl}/cast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, device })
+      body: JSON.stringify({ url })
     });
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok || result.success === false) {
-      setStatus(result.error || 'Casting failed');
-      return;
-    }
     setStatus('Casting started: ' + url.substring(0, 40) + '...');
-    refreshStatus();
   } catch (e) {
     setStatus('Error casting: ' + e.message);
   }
 }
 
 async function control(action) {
+  if (currentMode === 'standalone') {
+    if (!selectedDevice) return;
+    try {
+      await browser.runtime.sendMessage({ type: 'control', action });
+      setStatus('Action: ' + action);
+    } catch (e) {
+      setStatus('Control error: ' + e.message);
+    }
+    return;
+  }
+  
   if (!serverUrl || !validateServerUrl(serverUrl)) return;
   try {
-    await fetchWithTimeout(`${serverUrl}/control`, {
+    await fetch(`${serverUrl}/control`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action })
     });
     setStatus('Action: ' + action);
-    refreshStatus();
   } catch (e) {
     setStatus('Control error: ' + e.message);
-  }
-}
-
-async function setSeek(value) {
-  if (!serverUrl || !validateServerUrl(serverUrl)) return;
-  try {
-    const ms = parseInt(value, 10);
-    await fetchWithTimeout(`${serverUrl}/seek`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: ms })
-    });
-    refreshStatus();
-  } catch (e) {
-    console.error('Seek error:', e);
-  }
-}
-
-async function setVolume(value) {
-  if (!serverUrl || !validateServerUrl(serverUrl)) return;
-  try {
-    const volume = Math.max(0, Math.min(1, parseInt(value, 10) / 100));
-    await fetchWithTimeout(`${serverUrl}/volume`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: volume })
-    });
-    refreshStatus();
-  } catch (e) {
-    console.error('Volume error:', e);
-  }
-}
-
-async function addSubtitle(file) {
-  if (!file || !serverUrl || !validateServerUrl(serverUrl)) return;
-  try {
-    const data = await file.text();
-    const name = file.name || 'subtitle';
-    const lower = name.toLowerCase();
-    const format = lower.endsWith('.vtt') ? 'vtt' : lower.endsWith('.srt') ? 'srt' : 'vtt';
-    const res = await fetchWithTimeout(`${serverUrl}/subtitle`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: data, filename: name, format })
-    });
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok || result.success === false) {
-      setStatus(result.error || 'Subtitle error');
-      return;
-    }
-    setStatus((result.message || 'Subtitle applied') + ': ' + name);
-    refreshStatus();
-  } catch (e) {
-    setStatus('Subtitle error: ' + e.message);
   }
 }
 
@@ -395,18 +327,26 @@ document.getElementById('yt').onclick = async () => {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   const url = tab.url;
   playlist.push(url);
-  cast(url);
+  if (currentMode === 'standalone') {
+    castToChromecast(url);
+  } else {
+    cast(url);
+  }
   updatePlaylist();
 };
 
 document.getElementById('mirror').onclick = async () => {
+  if (currentMode === 'standalone') {
+    setStatus('Mirroring not supported in standalone mode');
+    return;
+  }
   if (!serverUrl || !validateServerUrl(serverUrl)) {
     setStatus('Enter valid server URL first');
     return;
   }
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   try {
-    await fetchWithTimeout(`${serverUrl}/mirror`, {
+    await fetch(`${serverUrl}/mirror`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: tab.url })
@@ -418,37 +358,17 @@ document.getElementById('mirror').onclick = async () => {
 };
 
 document.getElementById('scanVideos').onclick = loadVideos;
-
-document.getElementById('progress').oninput = (e) => setSeek(e.target.value);
-document.getElementById('volume').oninput = (e) => setVolume(e.target.value);
-document.getElementById('subtitle').onchange = (e) => addSubtitle(e.target.files[0]);
+document.getElementById('discoverServer').onclick = discoverServer;
 
 const serverUrlInput = document.getElementById('serverUrl');
 if (serverUrlInput) {
-  serverUrlInput.addEventListener('change', (e) => updateServerUrl(e.target.value));
+  serverUrlInput.value = serverUrl;
+  serverUrlInput.addEventListener('change', (e) => {
+    serverUrl = e.target.value;
+    localStorage.setItem('serverUrl', serverUrl);
+    loadDevices();
+  });
 }
 
-document.getElementById('discoverServer').onclick = discoverServer;
-if (downloadAppBtn) {
-  downloadAppBtn.onclick = () => {
-    browser.tabs.create({ url: APP_DOWNLOAD_URL });
-  };
-}
-if (useLocalhostBtn) {
-  useLocalhostBtn.onclick = () => {
-    const localUrl = 'http://127.0.0.1:5000';
-    if (serverInput) serverInput.value = localUrl;
-    updateServerUrl(localUrl);
-  };
-}
-devicesSelect.addEventListener('change', () => {
-  selectedDevice = devicesSelect.value;
-  if (selectedDevice) {
-    localStorage.setItem('selectedDevice', selectedDevice);
-  }
-});
-
-loadDevices();
+setMode(currentMode);
 setTimeout(loadVideos, 500);
-if (statusPollTimer) clearInterval(statusPollTimer);
-statusPollTimer = setInterval(refreshStatus, STATUS_POLL_INTERVAL);

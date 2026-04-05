@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Chromecast Ultimate",
-  "version": "4.0.6",
+  "version": "5.0.0",
   "description": "Cast videos and mirror tabs to Chromecast devices directly from Firefox",
   "license": "https://choosealicense.com/licenses/mit/",
   "id": "chromecast-ultimate@firefox",
-  "permissions": ["activeTab", "tabs", "scripting"],
+  "permissions": ["activeTab", "tabs", "scripting", "storage"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": "icons/icon.svg"
@@ -14,6 +14,18 @@
     "48": "icons/icon.svg",
     "96": "icons/icon.svg",
     "128": "icons/icon.svg"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["cast-button.js"],
+      "css": ["cast-button.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "type": "module"
   },
   "host_permissions": [
     "http://192.168.0.0/16/*",
