@@ -1,6 +1,7 @@
 const HELPER_URLS = ['http://localhost:4269', 'http://127.0.0.1:4269'];
 let lastDevice = null;
 const NATIVE_HOST_NAME = 'chromecast_ultimate_helper';
+const lastMediaUrlByTab = new Map();
 
 async function helperRequest(path, options = {}) {
   const request = async (baseUrl) => {
@@ -61,6 +62,22 @@ async function getCookieHeader(url) {
 }
 
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'mediaUrl') {
+    const tabId = sender?.tab?.id;
+    if (tabId != null && message.url) {
+      lastMediaUrlByTab.set(tabId, message.url);
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message.type === 'getLastMediaUrl') {
+    const tabId = sender?.tab?.id;
+    const url = tabId != null ? lastMediaUrlByTab.get(tabId) : null;
+    sendResponse({ url: url || null });
+    return true;
+  }
+
   if (message.type === 'ensureHelper') {
     ensureHelperRunning()
       .then(() => sendResponse({ ok: true }))

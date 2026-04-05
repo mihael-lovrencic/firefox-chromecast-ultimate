@@ -164,6 +164,9 @@
     if (event.data?.type === 'chromecast-url' && event.data.url) {
       const extracted = extractMediaUrl(event.data.url) || event.data.url;
       capturedUrls.push(extracted);
+      try {
+        browser.runtime.sendMessage({ type: 'mediaUrl', url: extracted });
+      } catch (_) {}
     }
   });
   installUrlSniffer();

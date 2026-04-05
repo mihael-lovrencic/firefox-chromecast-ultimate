@@ -213,10 +213,20 @@ async function castToChromecast(url) {
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       referer = tab?.url || '';
     } catch (_) {}
+    let finalUrl = url;
+    if (!/youtube\.com|youtu\.be/i.test(finalUrl) && !finalUrl.includes('.m3u8') && !finalUrl.includes('.mp4')) {
+      try {
+        const last = await browser.runtime.sendMessage({ type: 'getLastMediaUrl' });
+        if (last && last.url) {
+          finalUrl = last.url;
+          setStatus('Using captured stream URL');
+        }
+      } catch (_) {}
+    }
     const useProxy = shouldProxy(url);
     const res = await browser.runtime.sendMessage({
       type: 'castVideo',
-      videoUrl: url,
+      videoUrl: finalUrl,
       device: selectedDevice,
       useProxy,
       referer
