@@ -33,7 +33,8 @@ jobs:
             --amo-metadata "amo-metadata.json" \
             --api-key "${{ secrets.AMO_JWT_ISSUER }}" \
             --api-secret "${{ secrets.AMO_JWT_SECRET }}" \
-            --timeout 300000
+            --timeout 300000 \
+            --approval-timeout 0
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
