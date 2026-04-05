@@ -381,9 +381,13 @@ const server = http.createServer(async (req, res) => {
       console.log('[Cast] url=', url, 'referer=', referer, 'useProxy=', useProxy);
       if (!url) return json(res, 400, { error: 'Missing url' });
       let device = body.device;
+      const devices = await discoverDevices();
       if (!device) {
-        const devices = await discoverDevices();
         device = devices[0];
+      } else if (!device.address) {
+        const byId = device.id ? devices.find(d => d.id === device.id) : null;
+        const byName = device.name ? devices.find(d => d.name === device.name) : null;
+        device = byId || byName || devices[0];
       }
       if (!device) return json(res, 404, { error: 'No devices found' });
       if (!device.port) device.port = 8009;
