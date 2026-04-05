@@ -52,16 +52,26 @@ document.getElementById('modeAndroid').onclick = () => setMode('android');
 
 async function scanForChromecasts() {
   setStatus('Scanning for Chromecasts...');
-  discoveredDevicesContainer.innerHTML = '<button id="scanDevices" style="background:#34a853;">Scan for Chromecasts</button>';
-  document.getElementById('scanDevices').onclick = scanForChromecasts;
+  discoveredDevicesContainer.innerHTML = '<button id="scanDevices" style="background:#34a853;">Scanning...</button><div id="scanDebug" style="font-size:10px;margin-top:5px;color:#666;"></div>';
+  
+  const debugEl = document.getElementById('scanDebug');
+  const log = (msg) => {
+    console.log(msg);
+    if (debugEl) debugEl.textContent += msg + '\n';
+  };
+  
+  log('Starting discovery...');
   
   try {
+    log('Sending message to background script...');
     const devices = await browser.runtime.sendMessage({ type: 'discoverDevices' });
+    log('Got response: ' + JSON.stringify(devices));
     
     discoveredDevicesContainer.innerHTML = '';
     
     if (!devices || devices.length === 0) {
-      setStatus('No Chromecasts found. Click scan to retry.');
+      setStatus('No Chromecasts found. Check network access.');
+      log('No devices found');
       const btn = document.createElement('button');
       btn.style.background = '#34a853';
       btn.textContent = 'Scan for Chromecasts';
@@ -69,6 +79,8 @@ async function scanForChromecasts() {
       discoveredDevicesContainer.appendChild(btn);
       return;
     }
+    
+    log('Found ' + devices.length + ' device(s)!');
     
     devices.forEach(device => {
       const div = document.createElement('div');
@@ -92,7 +104,8 @@ async function scanForChromecasts() {
     }
   } catch (e) {
     console.error('Discovery error:', e);
-    setStatus('Discovery failed. Click scan to retry.');
+    setStatus('Discovery failed: ' + e.message);
+    log('ERROR: ' + e.message);
   }
 }
 
