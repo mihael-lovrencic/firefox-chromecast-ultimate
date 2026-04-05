@@ -285,7 +285,7 @@ function castToDevice(device, url, options = {}) {
       cleanup(err);
     });
     const port = device.port || 8009;
-    client.connect(device.address, port, () => {
+    client.connect({ host: device.address, port }, () => {
       if (isYouTubeUrl(url)) {
         const videoId = extractYouTubeId(url) || extractYouTubeId(options.referer || '');
         if (!videoId) {
