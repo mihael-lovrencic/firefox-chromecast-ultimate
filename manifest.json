@@ -16,9 +16,8 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["cast-button.js"],
-      "css": ["cast-button.css"],
-      "run_at": "document_idle"
+      "js": ["test-content.js"],
+      "run_at": "document_start"
     }
   ],
   "background": {
