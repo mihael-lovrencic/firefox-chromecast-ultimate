@@ -21,10 +21,10 @@ jobs:
       - name: Build extension
         run: npx web-ext build
 
-      - name: Submit to AMO (unlisted first)
+      - name: Submit to AMO (listed/public)
         run: |
           npx web-ext sign \
-            --channel unlisted \
+            --channel listed \
             --api-key "${{ secrets.AMO_JWT_ISSUER }}" \
             --api-secret "${{ secrets.AMO_JWT_SECRET }}"
         env:
