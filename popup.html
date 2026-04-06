@@ -3,64 +3,38 @@
 <head>
   <meta charset="utf-8">
   <style>
-    body { font-family: Arial, sans-serif; width: 380px; padding: 10px; margin: 0; }
-    h3 { margin: 0 0 10px 0; color: #4285f4; }
-    h4 { margin: 10px 0 5px 0; color: #666; font-size: 14px; }
-    select, button, input { width: 100%; margin-top: 5px; box-sizing: border-box; }
-    button { padding: 8px; cursor: pointer; background: #4285f4; color: white; border: none; border-radius: 4px; }
-    button:hover { background: #3367d6; }
-    button:disabled { background: #ccc; cursor: not-allowed; }
-    label { display: block; margin-top: 8px; font-size: 12px; color: #666; }
-    #progress, #volume { width: 100%; }
-    #videos, #playlist { margin-top: 5px; }
-    #videos button, #playlist div { margin: 2px 0; font-size: 11px; }
-    hr { margin: 12px 0; border: none; border-top: 1px solid #ddd; }
-    .status { font-size: 11px; color: #666; margin-top: 5px; }
-    .video-btn { background: #34a853; }
-    .video-btn:hover { background: #2d8f47; }
-    input[type="file"] { font-size: 11px; }
-    input[type="text"] { font-size: 12px; padding: 6px; }
+    body { font-family: Arial, sans-serif; width: 380px; padding: 10px; margin: 0; background: #1a1a2e; color: white; }
+    h3 { margin: 0 0 10px 0; background: linear-gradient(135deg, #4285f4, #34a853); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    h4 { margin: 10px 0 5px 0; color: #aaa; font-size: 14px; }
+    button { padding: 10px; cursor: pointer; background: #4285f4; color: white; border: none; border-radius: 8px; font-weight: bold; transition: all 0.3s; }
+    button:hover { background: #3367d6; transform: translateY(-2px); }
+    button:disabled { background: #555; cursor: not-allowed; transform: none; }
+    .status { font-size: 11px; color: #888; margin-top: 5px; padding: 8px; background: #16213e; border-radius: 4px; }
     .mode-toggle { display: flex; gap: 5px; margin-bottom: 10px; }
-    .mode-toggle button { flex: 1; padding: 6px; font-size: 11px; }
-    .mode-toggle button.active { background: #34a853; }
-    .casting-indicator { display: inline-block; width: 10px; height: 10px; background: #34a853; border-radius: 50%; margin-right: 5px; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-    .section { display: none; }
-    .section.active { display: block; }
-    .control-btns { display: flex; gap: 5px; }
-    .control-btns button { flex: 1; padding: 6px; font-size: 11px; }
-    .device-btn {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 15px;
-      background: linear-gradient(135deg, #4285f4, #34a853);
-      border: none;
-      border-radius: 12px;
-      color: white;
-      cursor: pointer;
-      margin: 6px 0;
-      width: 100%;
-      text-align: left;
-      transition: transform 0.2s, box-shadow 0.2s;
-      box-shadow: 0 2px 6px rgba(66, 133, 244, 0.3);
-    }
-    .device-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);
-    }
+    .mode-toggle button { flex: 1; padding: 8px; font-size: 12px; }
+    .mode-toggle button.active { background: linear-gradient(135deg, #34a853, #0f9d58); }
+    .device-btn { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: linear-gradient(135deg, #4285f4, #34a853); border-radius: 12px; color: white; cursor: pointer; margin: 8px 0; width: 100%; text-align: left; border: none; box-shadow: 0 4px 15px rgba(66, 133, 244, 0.3); transition: all 0.3s; }
+    .device-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(66, 133, 244, 0.4); }
+    .device-btn.selected { background: linear-gradient(135deg, #34a853, #0f9d58); box-shadow: 0 4px 15px rgba(52, 168, 83, 0.4); }
     .device-btn svg { flex-shrink: 0; }
     .device-btn .device-name { font-weight: bold; font-size: 14px; flex-grow: 1; }
     .device-btn .device-ip { font-size: 11px; opacity: 0.8; }
-    .device-btn.selected {
-      background: linear-gradient(135deg, #34a853, #0f9d58);
-      box-shadow: 0 4px 12px rgba(52, 168, 83, 0.4);
-    }
+    hr { margin: 15px 0; border: none; border-top: 1px solid #333; }
+    .control-btns { display: flex; gap: 8px; margin: 10px 0; }
+    .control-btns button { flex: 1; padding: 10px; font-size: 12px; background: #333; }
+    .control-btns button:hover { background: #444; }
+    .casting { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    .section { display: none; }
+    .section.active { display: block; }
+    .loading { display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .spinner { width: 30px; height: 30px; border: 3px solid #333; border-top-color: #4285f4; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
   <h3>Chromecast Ultimate</h3>
-  <div id="status" class="status">Initializing...</div>
+  <div id="status" class="status">Ready</div>
 
   <div class="mode-toggle">
     <button id="modeStandalone" class="active">Standalone</button>
@@ -68,52 +42,39 @@
   </div>
 
   <div id="standaloneSection" class="section active">
-    <label>Helper Status:</label>
-    <div id="helperStatus" class="status">Checking helper...</div>
-    <div id="helperDevices" class="status"></div>
-    <button id="startHelper" style="background:#444; margin-top:5px;">Start Helper</button>
-    <button id="checkNativeHost" style="background:#555; margin-top:5px;">Check Native Host</button>
-    <button id="openHelperStatus" style="background:#666; margin-top:5px;">Open Helper Status</button>
-    <label>Discovered Devices:</label>
-    <div id="discoveredDevices">
-      <button id="scanDevices" style="background:#34a853;">Scan for Chromecasts</button>
+    <div id="devicesContainer">
+      <div id="loadingIndicator" class="loading">
+        <div class="spinner"></div>
+      </div>
+      <div id="discoveredDevices"></div>
     </div>
+    <button id="scanBtn" style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, #4285f4, #34a853);">
+      Scan for Chromecasts
+    </button>
   </div>
 
   <div id="androidSection" class="section">
-    <label>Server URL (Android device IP):</label>
-    <input type="text" id="serverUrl" placeholder="http://192.168.1.100:5000">
-    <button id="discoverServer" style="background:#34a853;">Auto Discover</button>
-    <label>Device:</label>
-    <select id="devices"><option value="">Loading devices...</option></select>
+    <label style="color: #aaa; font-size: 12px;">Server URL (Android device IP):</label>
+    <input type="text" id="serverUrl" placeholder="http://192.168.1.100:5000" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #333; background: #16213e; color: white; margin-top: 5px;">
+    <button id="connectBtn" style="width: 100%; margin-top: 8px; background: #34a853;">Connect</button>
   </div>
 
   <hr>
 
-  <label>Videos on Current Tab:</label>
-  <div id="videos"><button id="scanVideos">Scan for Videos</button></div>
+  <button id="scanVideosBtn" style="width: 100%; background: #333;">Find Videos on Page</button>
+  <div id="videosList"></div>
 
-  <button id="yt">Cast Current Page (YouTube)</button>
-  <button id="mirror">Mirror Tab</button>
+  <button id="castCurrentBtn" style="width: 100%; background: linear-gradient(135deg, #fbbc04, #ff6d00); margin-top: 10px;">
+    Cast Current Page
+  </button>
 
   <hr>
-  
+
   <div class="control-btns">
     <button id="playBtn">Play</button>
     <button id="pauseBtn">Pause</button>
     <button id="stopBtn">Stop</button>
   </div>
-
-  <label>Seek:</label>
-  <input type="range" id="progress" min="0" max="100" value="0">
-
-  <label>Volume:</label>
-  <input type="range" id="volume" min="0" max="100" value="50">
-
-  <hr>
-  <h4>Playlist Queue</h4>
-  <div id="playlist"></div>
-  <button id="clearPlaylist" style="background:#fbbc04; margin-top:5px;">Clear Playlist</button>
 
   <script src="popup.js"></script>
 </body>
