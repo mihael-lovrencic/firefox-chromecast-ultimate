@@ -8,6 +8,7 @@ const HOST = '0.0.0.0';
 const PORT = 4269;
 const DISCOVERY_TIMEOUT_MS = 2000;
 const sessions = new Map();
+const proxyHeadersByToken = new Map();
 const LOCAL_IP = getLocalIp() || '127.0.0.1';
 
 function json(res, status, payload) {
@@ -91,11 +92,9 @@ function getLocalIp() {
   return null;
 }
 
-function buildProxyUrl(url, referer, cookie, origin) {
+function buildProxyUrl(url, token) {
   const params = new URLSearchParams({ url });
-  if (referer) params.set('referer', referer);
-  if (cookie) params.set('cookie', cookie);
-  if (origin) params.set('origin', origin);
+  if (token) params.set('token', token);
   return `http://${LOCAL_IP}:${PORT}/proxy?${params.toString()}`;
 }
 
@@ -104,15 +103,63 @@ function isM3U8(url, contentType) {
   return url.toLowerCase().includes('.m3u8');
 }
 
-async function proxyFetch(targetUrl, referer, cookie, origin, range) {
+function sanitizeHeaderName(name) {
+  return name.toLowerCase();
+}
+
+function mergeHeaderMaps(...maps) {
+  const result = new Map();
+  for (const map of maps) {
+    if (!map) continue;
+    for (const [k, v] of map.entries()) {
+      result.set(k, v);
+    }
+  }
+  return result;
+}
+
+function toHeaderMap(rawHeaders = []) {
+  const map = new Map();
+  for (const h of rawHeaders) {
+    if (!h || !h.name || typeof h.value !== 'string') continue;
+    const key = sanitizeHeaderName(h.name);
+    map.set(key, h.value);
+  }
+  return map;
+}
+
+function filterHeaders(map) {
+  const blocked = new Set([
+    'host',
+    'connection',
+    'content-length',
+    'accept-encoding',
+    'upgrade',
+    'sec-websocket-key',
+    'sec-websocket-version',
+    'sec-websocket-extensions',
+    'sec-websocket-protocol'
+  ]);
+  const out = {};
+  for (const [k, v] of map.entries()) {
+    if (blocked.has(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+async function proxyFetch(targetUrl, headerMap, range) {
   const headers = {};
-  if (referer) headers.Referer = referer;
-  if (origin) headers.Origin = origin;
-  if (cookie) headers.Cookie = cookie;
+  const normalized = filterHeaders(headerMap || new Map());
+  for (const [k, v] of Object.entries(normalized)) {
+    headers[k] = v;
+  }
   if (range) headers.Range = range;
-  headers.Accept = '*/*';
-  headers['User-Agent'] =
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+  if (!headers.Accept) headers.Accept = '*/*';
+  if (!headers['User-Agent'] && !headers['user-agent']) {
+    headers['User-Agent'] =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+  }
   return fetch(targetUrl, { headers });
 }
 
@@ -120,9 +167,7 @@ async function handleProxy(req, res) {
   try {
     const reqUrl = new URL(req.url, `http://${req.headers.host}`);
     const target = reqUrl.searchParams.get('url');
-    const referer = reqUrl.searchParams.get('referer') || '';
-    const cookie = reqUrl.searchParams.get('cookie') || '';
-    const origin = reqUrl.searchParams.get('origin') || '';
+    const token = reqUrl.searchParams.get('token') || '';
     if (!target) return json(res, 400, { error: 'Missing url' });
     const targetUrl = new URL(target);
     if (!['http:', 'https:'].includes(targetUrl.protocol)) {
@@ -131,7 +176,8 @@ async function handleProxy(req, res) {
 
     let upstream;
     try {
-      upstream = await proxyFetch(targetUrl.toString(), referer, cookie, origin, req.headers.range);
+      const headerMap = proxyHeadersByToken.get(token) || new Map();
+      upstream = await proxyFetch(targetUrl.toString(), headerMap, req.headers.range);
     } catch (err) {
       return json(res, 502, { error: `Upstream fetch failed: ${err.message}` });
     }
@@ -147,7 +193,7 @@ async function handleProxy(req, res) {
           const trimmed = line.trim();
           if (!trimmed || trimmed.startsWith('#')) return line;
           const absolute = new URL(trimmed, baseUrl).toString();
-          return buildProxyUrl(absolute, referer);
+          return buildProxyUrl(absolute, token);
         })
         .join('\n');
       res.writeHead(200, {
@@ -297,7 +343,7 @@ function castToDevice(device, url, options = {}) {
           });
         });
       } else {
-        const castUrl = options.useProxy ? buildProxyUrl(url, options.referer, options.cookie, options.origin) : url;
+        const castUrl = options.useProxy ? buildProxyUrl(url, options.token) : url;
         console.log('[Cast] Using URL:', castUrl);
         client.launch(DefaultMediaReceiver, (err, player) => {
           if (err) return cleanup(err);
@@ -377,6 +423,15 @@ const server = http.createServer(async (req, res) => {
       const referer = body.referer || '';
       const cookie = body.cookie || '';
       const origin = body.origin || '';
+      const headerMap = toHeaderMap(body.headers || []);
+      const baseHeaders = new Map();
+      if (referer) baseHeaders.set('referer', referer);
+      if (origin) baseHeaders.set('origin', origin);
+      if (cookie) baseHeaders.set('cookie', cookie);
+      const merged = mergeHeaderMaps(headerMap, baseHeaders);
+      const token = Math.random().toString(36).slice(2);
+      proxyHeadersByToken.set(token, merged);
+      setTimeout(() => proxyHeadersByToken.delete(token), 30 * 60 * 1000);
       console.log('[Cast] url=', url, 'referer=', referer, 'useProxy=', useProxy);
       if (!url) return json(res, 400, { error: 'Missing url' });
       let device = body.device;
@@ -391,7 +446,7 @@ const server = http.createServer(async (req, res) => {
       if (!device) return json(res, 404, { error: 'No devices found' });
       if (!device.port) device.port = 8009;
       if (!device.address && device.host) device.address = device.host;
-      await castToDevice(device, url, { useProxy, referer, cookie, origin });
+      await castToDevice(device, url, { useProxy, referer, cookie, origin, token });
       return json(res, 200, { success: true });
     } catch (e) {
       console.error('[Cast] Failed:', e?.message || e);

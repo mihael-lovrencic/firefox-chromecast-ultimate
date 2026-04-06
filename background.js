@@ -2,6 +2,7 @@ const HELPER_URLS = ['http://localhost:4269', 'http://127.0.0.1:4269'];
 let lastDevice = null;
 const NATIVE_HOST_NAME = 'chromecast_ultimate_helper';
 const lastMediaUrlByTab = new Map();
+const lastMediaRequestByTab = new Map();
 
 async function helperRequest(path, options = {}) {
   const request = async (baseUrl) => {
@@ -96,6 +97,13 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'getLastMediaRequest') {
+    const tabId = sender?.tab?.id;
+    const data = tabId != null ? lastMediaRequestByTab.get(tabId) : null;
+    sendResponse({ data: data || null });
+    return true;
+  }
+
   if (message.type === 'ensureHelper') {
     ensureHelperRunning()
       .then(() => sendResponse({ ok: true }))
@@ -129,7 +137,8 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
           useProxy: !!message.useProxy,
           referer: message.referer || '',
           cookie,
-          origin
+          origin,
+          headers: Array.isArray(message.headers) ? message.headers : []
         };
         await helperRequest('/cast', {
           method: 'POST',
@@ -185,3 +194,24 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 browser.runtime.onInstalled.addListener(() => {
   console.log('Chromecast Ultimate extension installed');
 });
+
+function normalizeHeaders(headers) {
+  if (!Array.isArray(headers)) return [];
+  return headers
+    .filter(h => h && h.name && typeof h.value === 'string')
+    .map(h => ({ name: h.name, value: h.value }));
+}
+
+browser.webRequest.onBeforeSendHeaders.addListener(
+  (details) => {
+    if (!details || details.tabId < 0 || !details.url) return;
+    const url = details.url;
+    const isMedia = url.includes('.m3u8') || url.includes('.mp4');
+    if (!isMedia) return;
+    const headers = normalizeHeaders(details.requestHeaders || []);
+    lastMediaRequestByTab.set(details.tabId, { url, headers, ts: Date.now() });
+    lastMediaUrlByTab.set(details.tabId, url);
+  },
+  { urls: ['<all_urls>'] },
+  ['requestHeaders']
+);

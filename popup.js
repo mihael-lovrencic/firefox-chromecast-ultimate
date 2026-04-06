@@ -237,12 +237,20 @@ async function castToChromecast(url) {
       return;
     }
     const useProxy = shouldProxy(url);
+    let headers = [];
+    try {
+      const lastReq = await browser.runtime.sendMessage({ type: 'getLastMediaRequest' });
+      if (lastReq && lastReq.data && lastReq.data.url === finalUrl) {
+        headers = lastReq.data.headers || [];
+      }
+    } catch (_) {}
     const res = await browser.runtime.sendMessage({
       type: 'castVideo',
       videoUrl: finalUrl,
       device: selectedDevice,
       useProxy,
-      referer
+      referer,
+      headers
     });
     if (res && res.error) throw new Error(res.error);
     setStatus(`Casting to ${selectedDevice.name || selectedDevice.address}`);
