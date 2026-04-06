@@ -4,11 +4,24 @@ param(
 
 $regPath = "HKCU:\Software\Mozilla\NativeMessagingHosts"
 $hostName = "chromecast_ultimate_helper"
+$hostKeyPath = Join-Path $regPath $hostName
 
 if (-not (Test-Path $regPath)) {
   New-Item -Path $regPath | Out-Null
 }
 
-Set-ItemProperty -Path $regPath -Name $hostName -Value $ManifestPath
+if (-not (Test-Path $hostKeyPath)) {
+  New-Item -Path $hostKeyPath | Out-Null
+}
+
+# Firefox expects a subkey named after the host and the manifest path as the default value.
+Set-Item -Path $hostKeyPath -Value $ManifestPath
+
+# Clean up the older incorrect property-style registration if it exists.
+try {
+  Remove-ItemProperty -Path $regPath -Name $hostName -ErrorAction SilentlyContinue
+} catch {
+}
+
 Write-Output "Native host registered:"
-Write-Output "  $regPath\\$hostName -> $ManifestPath"
+Write-Output "  $hostKeyPath (Default) -> $ManifestPath"

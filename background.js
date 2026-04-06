@@ -3,6 +3,8 @@ let lastDevice = null;
 const NATIVE_HOST_NAME = 'chromecast_ultimate_helper';
 const lastMediaUrlByTab = new Map();
 const lastMediaRequestByTab = new Map();
+const HELPER_WAIT_ATTEMPTS = 20;
+const HELPER_WAIT_DELAY_MS = 300;
 
 function looksBase64(value) {
   return typeof value === 'string' && value.length >= 8 && /^[A-Za-z0-9+/=_-]+$/.test(value);
@@ -79,11 +81,37 @@ async function helperRequest(path, options = {}) {
   throw lastError || new Error('Helper not reachable');
 }
 
+async function isHelperReachable() {
+  for (const base of HELPER_URLS) {
+    try {
+      const res = await fetch(`${base}/status`);
+      if (res.ok) return true;
+    } catch (_) {}
+  }
+  return false;
+}
+
+async function waitForHelperReady() {
+  for (let i = 0; i < HELPER_WAIT_ATTEMPTS; i++) {
+    if (await isHelperReachable()) return true;
+    await new Promise(r => setTimeout(r, HELPER_WAIT_DELAY_MS));
+  }
+  return false;
+}
+
 async function ensureHelperRunning() {
   try {
-    await browser.runtime.sendNativeMessage(NATIVE_HOST_NAME, { type: 'ensureHelper' });
+    const response = await browser.runtime.sendNativeMessage(NATIVE_HOST_NAME, { type: 'ensureHelper' });
+    if (!response || response.ok !== true) {
+      throw new Error(response?.error || 'Native host failed to start helper');
+    }
+    const ready = await waitForHelperReady();
+    if (!ready) {
+      throw new Error('Helper not reachable after startup');
+    }
   } catch (e) {
     console.warn('[Native] Helper not available:', e?.message || e);
+    throw e;
   }
 }
 
