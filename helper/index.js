@@ -428,7 +428,8 @@ const server = http.createServer(async (req, res) => {
       if (referer) baseHeaders.set('referer', referer);
       if (origin) baseHeaders.set('origin', origin);
       if (cookie) baseHeaders.set('cookie', cookie);
-      const merged = mergeHeaderMaps(headerMap, baseHeaders);
+      // Prefer the exact captured media request headers over the top-level tab headers.
+      const merged = mergeHeaderMaps(baseHeaders, headerMap);
       const token = Math.random().toString(36).slice(2);
       proxyHeadersByToken.set(token, merged);
       setTimeout(() => proxyHeadersByToken.delete(token), 30 * 60 * 1000);

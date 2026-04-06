@@ -4,6 +4,43 @@ const NATIVE_HOST_NAME = 'chromecast_ultimate_helper';
 const lastMediaUrlByTab = new Map();
 const lastMediaRequestByTab = new Map();
 
+function looksBase64(value) {
+  return typeof value === 'string' && value.length >= 8 && /^[A-Za-z0-9+/=_-]+$/.test(value);
+}
+
+function decodeMaybeBase64(value) {
+  try {
+    return atob(value.replace(/[-_]/g, '+').replace(/ /g, '+'));
+  } catch (_) {
+    return null;
+  }
+}
+
+function extractMediaUrl(raw) {
+  try {
+    if (!raw || typeof raw !== 'string') return null;
+    const direct = raw.match(/https?:\/\/[^"'\\s]+?\.(m3u8|mp4)([^"'\\s]*)/i);
+    if (direct && direct[0]) return direct[0];
+
+    const parsed = new URL(raw);
+    for (const [, value] of parsed.searchParams.entries()) {
+      const candidate = decodeURIComponent(value);
+      if (candidate.includes('.m3u8') || candidate.includes('.mp4')) return candidate;
+      const embedded = candidate.match(/https?:\/\/[^"'\\s]+?\.(m3u8|mp4)([^"'\\s]*)/i);
+      if (embedded && embedded[0]) return embedded[0];
+      if (looksBase64(candidate)) {
+        const decoded = decodeMaybeBase64(candidate);
+        if (decoded && (decoded.includes('.m3u8') || decoded.includes('.mp4'))) return decoded;
+      }
+      if (looksBase64(value)) {
+        const decoded = decodeMaybeBase64(value);
+        if (decoded && (decoded.includes('.m3u8') || decoded.includes('.mp4'))) return decoded;
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
 async function helperRequest(path, options = {}) {
   const request = async (baseUrl) => {
     const res = await fetch(`${baseUrl}${path}`, {
@@ -205,7 +242,7 @@ function normalizeHeaders(headers) {
 browser.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
     if (!details || details.tabId < 0 || !details.url) return;
-    const url = details.url;
+    const url = extractMediaUrl(details.url) || details.url;
     const isMedia = url.includes('.m3u8') || url.includes('.mp4');
     if (!isMedia) return;
     const headers = normalizeHeaders(details.requestHeaders || []);
