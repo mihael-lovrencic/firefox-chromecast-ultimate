@@ -7,6 +7,10 @@ const discoveredDevicesContainer = document.getElementById('discoveredDevices');
 const loadingIndicator = document.getElementById('loadingIndicator');
 const videosList = document.getElementById('videosList');
 const serverUrlInput = document.getElementById('serverUrl');
+const debugTabUrlEl = document.getElementById('debugTabUrl');
+const debugMediaUrlEl = document.getElementById('debugMediaUrl');
+const debugProxyEl = document.getElementById('debugProxy');
+const debugHeadersEl = document.getElementById('debugHeaders');
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -124,25 +128,70 @@ async function getActiveTab() {
   return tab;
 }
 
+function formatHeaderSummary(headers = []) {
+  if (!Array.isArray(headers) || headers.length === 0) {
+    return 'No captured request headers yet';
+  }
+  return headers
+    .slice(0, 8)
+    .map(h => `${h.name}: ${h.value}`)
+    .join('\n');
+}
+
+function updateDebugPanel({ tabUrl = '-', mediaUrl = '-', headers = [], proxy = '-' }) {
+  if (debugTabUrlEl) debugTabUrlEl.textContent = tabUrl || '-';
+  if (debugMediaUrlEl) debugMediaUrlEl.textContent = mediaUrl || '-';
+  if (debugProxyEl) debugProxyEl.textContent = proxy;
+  if (debugHeadersEl) debugHeadersEl.textContent = formatHeaderSummary(headers);
+}
+
+async function refreshDebugPanel() {
+  try {
+    const tab = await getActiveTab();
+    const tabId = tab?.id;
+    const tabUrl = tab?.url || '-';
+    if (!Number.isInteger(tabId)) {
+      updateDebugPanel({ tabUrl, mediaUrl: '-', headers: [], proxy: 'No active tab' });
+      return;
+    }
+    const debug = await browser.runtime.sendMessage({ type: 'getCaptureDebug', tabId });
+    const headers = Array.isArray(debug?.data?.headers) ? debug.data.headers : [];
+    const mediaUrl = debug?.data?.url || debug?.mediaUrl || '-';
+    const proxy = mediaUrl && mediaUrl !== '-'
+      ? (shouldProxy(mediaUrl, headers) ? 'Proxy' : 'Direct')
+      : 'No media captured';
+    updateDebugPanel({ tabUrl, mediaUrl, headers, proxy });
+  } catch (error) {
+    updateDebugPanel({
+      tabUrl: '-',
+      mediaUrl: '-',
+      headers: [],
+      proxy: `Debug failed: ${error.message}`
+    });
+  }
+}
+
 async function resolveVideoUrl(initialUrl, tabUrl) {
   let finalUrl = initialUrl;
   let headers = [];
+  const tab = await getActiveTab();
+  const tabId = tab?.id;
 
   if (!/youtube\.com|youtu\.be/i.test(finalUrl) && !isDirectMediaUrl(finalUrl)) {
-    const lastReq = await browser.runtime.sendMessage({ type: 'getLastMediaRequest' });
+    const lastReq = await browser.runtime.sendMessage({ type: 'getLastMediaRequest', tabId });
     if (lastReq && lastReq.data && isDirectMediaUrl(lastReq.data.url)) {
       finalUrl = lastReq.data.url;
       headers = Array.isArray(lastReq.data.headers) ? lastReq.data.headers : [];
       setStatus('Using captured stream URL');
     } else {
-      const lastUrl = await browser.runtime.sendMessage({ type: 'getLastMediaUrl' });
+      const lastUrl = await browser.runtime.sendMessage({ type: 'getLastMediaUrl', tabId });
       if (lastUrl && isDirectMediaUrl(lastUrl.url)) {
         finalUrl = lastUrl.url;
         setStatus('Using captured stream URL');
       }
     }
   } else if (isDirectMediaUrl(finalUrl)) {
-    const lastReq = await browser.runtime.sendMessage({ type: 'getLastMediaRequest' });
+    const lastReq = await browser.runtime.sendMessage({ type: 'getLastMediaRequest', tabId });
     if (lastReq && lastReq.data && lastReq.data.url === finalUrl) {
       headers = Array.isArray(lastReq.data.headers) ? lastReq.data.headers : [];
     }
@@ -186,6 +235,7 @@ async function castVideo(videoUrl) {
         throw new Error(response.error);
       }
       setStatus('Casting started!');
+      await refreshDebugPanel();
       return;
     }
 
@@ -204,6 +254,7 @@ async function castVideo(videoUrl) {
     }
 
     setStatus('Casting started!');
+    await refreshDebugPanel();
   } catch (error) {
     setStatus('Cast failed: ' + error.message);
   }
@@ -267,6 +318,7 @@ function setMode(mode) {
   } else {
     setStatus('Android mode - connect to server');
   }
+  refreshDebugPanel();
 }
 
 async function sendControl(action) {
@@ -294,6 +346,7 @@ document.getElementById('castCurrentBtn').onclick = async () => {
     castVideo(tab.url);
   }
 };
+document.getElementById('refreshDebugBtn').onclick = refreshDebugPanel;
 
 document.getElementById('connectBtn').onclick = () => {
   serverUrl = serverUrlInput.value;
@@ -306,3 +359,4 @@ if (serverUrlInput) {
 }
 
 setMode(currentMode);
+refreshDebugPanel();

@@ -128,16 +128,27 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'getLastMediaUrl') {
-    const tabId = sender?.tab?.id;
+    const tabId = Number.isInteger(message.tabId) ? message.tabId : sender?.tab?.id;
     const url = tabId != null ? lastMediaUrlByTab.get(tabId) : null;
     sendResponse({ url: url || null });
     return true;
   }
 
   if (message.type === 'getLastMediaRequest') {
-    const tabId = sender?.tab?.id;
+    const tabId = Number.isInteger(message.tabId) ? message.tabId : sender?.tab?.id;
     const data = tabId != null ? lastMediaRequestByTab.get(tabId) : null;
     sendResponse({ data: data || null });
+    return true;
+  }
+
+  if (message.type === 'getCaptureDebug') {
+    const tabId = Number.isInteger(message.tabId) ? message.tabId : sender?.tab?.id;
+    const data = tabId != null ? lastMediaRequestByTab.get(tabId) : null;
+    const mediaUrl = tabId != null ? lastMediaUrlByTab.get(tabId) : null;
+    sendResponse({
+      data: data || null,
+      mediaUrl: mediaUrl || null
+    });
     return true;
   }
 

@@ -29,6 +29,15 @@
     .section.active { display: block; }
     .loading { display: flex; align-items: center; justify-content: center; padding: 20px; }
     .spinner { width: 30px; height: 30px; border: 3px solid #333; border-top-color: #4285f4; border-radius: 50%; animation: spin 1s linear infinite; }
+    .debug-panel { margin-top: 10px; padding: 10px; background: #101827; border: 1px solid #24324d; border-radius: 10px; }
+    .debug-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .debug-head h4 { margin: 0; color: #d6e4ff; }
+    .debug-head button { padding: 6px 10px; font-size: 11px; background: #243b63; }
+    .debug-grid { display: grid; gap: 8px; }
+    .debug-item { background: #16213e; border-radius: 8px; padding: 8px; }
+    .debug-label { display: block; font-size: 10px; letter-spacing: 0.08em; color: #7ea4dc; text-transform: uppercase; margin-bottom: 4px; }
+    .debug-value { font-size: 12px; color: #f4f7fb; word-break: break-word; }
+    .debug-value.mono { font-family: Consolas, Monaco, monospace; font-size: 11px; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
@@ -67,6 +76,31 @@
   <button id="castCurrentBtn" style="width: 100%; background: linear-gradient(135deg, #fbbc04, #ff6d00); margin-top: 10px;">
     Cast Current Page
   </button>
+
+  <div class="debug-panel">
+    <div class="debug-head">
+      <h4>Capture Debug</h4>
+      <button id="refreshDebugBtn">Refresh</button>
+    </div>
+    <div class="debug-grid">
+      <div class="debug-item">
+        <span class="debug-label">Page</span>
+        <div id="debugTabUrl" class="debug-value mono">-</div>
+      </div>
+      <div class="debug-item">
+        <span class="debug-label">Captured Stream</span>
+        <div id="debugMediaUrl" class="debug-value mono">-</div>
+      </div>
+      <div class="debug-item">
+        <span class="debug-label">Proxy Decision</span>
+        <div id="debugProxy" class="debug-value">-</div>
+      </div>
+      <div class="debug-item">
+        <span class="debug-label">Captured Headers</span>
+        <div id="debugHeaders" class="debug-value mono">-</div>
+      </div>
+    </div>
+  </div>
 
   <hr>
 
