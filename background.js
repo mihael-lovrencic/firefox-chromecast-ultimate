@@ -215,6 +215,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
           url: message.videoUrl,
           device,
           useProxy: !!message.useProxy,
+          streamType: message.streamType || '',
           referer: message.referer || '',
           cookie,
           origin,

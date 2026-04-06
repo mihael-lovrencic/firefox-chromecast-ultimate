@@ -6,6 +6,7 @@
   const castButtons = new Map();
   let updateTimer = null;
   const capturedUrls = [];
+  const relaySessions = new WeakMap();
 
   function createCastGlyph() {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -85,6 +86,134 @@
     document.documentElement.appendChild(script);
     script.remove();
   }
+
+  async function fetchHelperJson(path, options = {}) {
+    const urls = ['http://localhost:4269', 'http://127.0.0.1:4269'];
+    let lastError = null;
+    for (const base of urls) {
+      try {
+        const response = await fetch(`${base}${path}`, options);
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `HTTP ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error('Helper not reachable');
+  }
+
+  function chooseRelayMimeType() {
+    const candidates = [
+      'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=vp8',
+      'video/webm'
+    ];
+    return candidates.find(type => window.MediaRecorder && MediaRecorder.isTypeSupported(type)) || 'video/webm';
+  }
+
+  async function postRelayChunk(id, blob, done = false) {
+    const urls = ['http://localhost:4269', 'http://127.0.0.1:4269'];
+    const body = done ? null : await blob.arrayBuffer();
+    let lastError = null;
+    for (const base of urls) {
+      try {
+        const response = await fetch(`${base}/relay/chunk?id=${encodeURIComponent(id)}${done ? '&done=1' : ''}`, {
+          method: 'POST',
+          headers: done ? {} : { 'Content-Type': 'application/octet-stream' },
+          body
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error('Failed to send relay chunk');
+  }
+
+  async function startRelayCapture(video) {
+    const existing = relaySessions.get(video);
+    if (existing && existing.relayUrl) {
+      return existing;
+    }
+    if (!video || typeof video.captureStream !== 'function' || typeof MediaRecorder === 'undefined') {
+      throw new Error('Browser relay is not supported on this page');
+    }
+    const stream = video.captureStream();
+    const mimeType = chooseRelayMimeType();
+    const relay = await fetchHelperJson('/relay/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mimeType })
+    });
+    const recorder = new MediaRecorder(stream, { mimeType });
+    const session = {
+      relayId: relay.id,
+      relayUrl: relay.url,
+      mimeType,
+      recorder,
+      stream,
+      firstChunkPromise: null
+    };
+    relaySessions.set(video, session);
+    session.firstChunkPromise = new Promise((resolve, reject) => {
+      let resolved = false;
+      recorder.ondataavailable = async (event) => {
+        if (!event.data || event.data.size === 0) return;
+        try {
+          await postRelayChunk(relay.id, event.data, false);
+          if (!resolved) {
+            resolved = true;
+            resolve();
+          }
+        } catch (error) {
+          if (!resolved) {
+            resolved = true;
+            reject(error);
+          }
+        }
+      };
+      recorder.onerror = (event) => {
+        const error = event?.error || new Error('Relay recorder failed');
+        if (!resolved) {
+          resolved = true;
+          reject(error);
+        }
+      };
+      recorder.onstop = async () => {
+        try {
+          await postRelayChunk(relay.id, null, true);
+        } catch (_) {}
+      };
+    });
+    recorder.start(1000);
+    await session.firstChunkPromise;
+    return session;
+  }
+
+  async function castViaRelay(video, device, btn) {
+    setButtonVisual(btn, 'casting', 'Browser relay');
+    const relay = await startRelayCapture(video);
+    const response = await browser.runtime.sendMessage({
+      type: 'castVideo',
+      videoUrl: relay.relayUrl,
+      device,
+      useProxy: false,
+      streamType: 'LIVE',
+      referer: window.location.href,
+      headers: [],
+      subtitles: []
+    });
+    if (response && response.error) {
+      throw new Error(response.error);
+    }
+    return relay;
+  }
   
   function createCastButton(video) {
     if (castButtons.has(video)) return;
@@ -162,8 +291,21 @@
             if (res && res.error) throw new Error(res.error);
             setButtonVisual(btn, 'success', `Connected to ${device.name || device.address}`);
             setTimeout(() => resetButton(btn, 'Cast'), 3000);
-          }).catch(err => {
+          }).catch(async err => {
             console.error('[Chromecast] Cast error:', err);
+            if ((err.message || '').includes('Stream host blocked cast stream')) {
+              try {
+                await castViaRelay(video, device, btn);
+                setButtonVisual(btn, 'success', `Relaying to ${device.name || device.address}`);
+                setTimeout(() => resetButton(btn, 'Cast'), 3000);
+                return;
+              } catch (relayError) {
+                console.error('[Chromecast] Relay error:', relayError);
+                setButtonVisual(btn, 'error', relayError.message || 'Relay failed');
+                setTimeout(() => resetButton(btn, 'Cast'), 3500);
+                return;
+              }
+            }
             setButtonVisual(btn, 'error', err.message || 'Cast failed');
             setTimeout(() => resetButton(btn, 'Cast'), 3000);
           });
@@ -384,5 +526,22 @@
 
     return subtitles;
   }
+
+  browser.runtime.onMessage.addListener((message) => {
+    if (message?.type !== 'startBrowserRelay') {
+      return false;
+    }
+    const videos = Array.from(document.querySelectorAll('video'));
+    const video = videos[message.videoIndex];
+    if (!video) {
+      return Promise.resolve({ error: 'Video not found in frame' });
+    }
+    return startRelayCapture(video)
+      .then(relay => ({
+        relayUrl: relay.relayUrl,
+        mimeType: relay.mimeType
+      }))
+      .catch(error => ({ error: error.message || 'Relay failed' }));
+  });
   
 })();

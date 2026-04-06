@@ -466,7 +466,7 @@ async function castVideo(videoUrl, subtitles = [], videoContext = null) {
       await ensureHelperReady();
       const { finalUrl, headers } = await resolveVideoUrl(videoUrl, refererUrl);
       const chosenSubtitles = applySubtitleChoice(subtitles);
-      const response = await browser.runtime.sendMessage({
+      let response = await browser.runtime.sendMessage({
         type: 'castVideo',
         videoUrl: finalUrl,
         device: selectedDevice,
@@ -475,6 +475,28 @@ async function castVideo(videoUrl, subtitles = [], videoContext = null) {
         headers,
         subtitles: chosenSubtitles
       });
+      if (response && response.error && response.error.includes('Stream host blocked cast stream') && videoContext?.frameId != null) {
+        setStatus('Blocked stream, switching to browser relay...');
+        const relay = await browser.tabs.sendMessage(tab.id, {
+          type: 'startBrowserRelay',
+          videoIndex: videoContext.videoIndex
+        }, {
+          frameId: videoContext.frameId
+        });
+        if (relay && relay.error) {
+          throw new Error(relay.error);
+        }
+        response = await browser.runtime.sendMessage({
+          type: 'castVideo',
+          videoUrl: relay.relayUrl,
+          device: selectedDevice,
+          useProxy: false,
+          streamType: 'LIVE',
+          referer: refererUrl,
+          headers: [],
+          subtitles: []
+        });
+      }
       if (response && response.error) {
         throw new Error(response.error);
       }

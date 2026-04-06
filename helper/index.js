@@ -1,6 +1,6 @@
 const http = require('http');
 const os = require('os');
-const { Readable } = require('stream');
+const { Readable, PassThrough } = require('stream');
 const { Client, DefaultMediaReceiver, Application, RequestResponseController } = require('castv2-client');
 const { Bonjour } = require('bonjour-service');
 
@@ -10,6 +10,7 @@ const DISCOVERY_TIMEOUT_MS = 2000;
 const sessions = new Map();
 const proxyHeadersByToken = new Map();
 const inlineSubtitlesById = new Map();
+const relaySessions = new Map();
 const LOCAL_IP = getLocalIp() || '127.0.0.1';
 
 function json(res, status, payload) {
@@ -41,6 +42,23 @@ function readBody(req) {
         reject(new Error('Invalid JSON'));
       }
     });
+  });
+}
+
+function readBinaryBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', chunk => {
+      chunks.push(chunk);
+      size += chunk.length;
+      if (size > 50_000_000) {
+        req.destroy();
+        reject(new Error('Payload too large'));
+      }
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
   });
 }
 
@@ -117,6 +135,10 @@ function buildSubtitleUrl(track, token) {
   return `http://${LOCAL_IP}:${PORT}/subtitle?${params.toString()}`;
 }
 
+function buildRelayUrl(id, extension = 'webm') {
+  return `http://${LOCAL_IP}:${PORT}/relay/${id}.${extension}`;
+}
+
 function isM3U8(url, contentType) {
   if (contentType && contentType.toLowerCase().includes('mpegurl')) return true;
   return url.toLowerCase().includes('.m3u8');
@@ -137,6 +159,30 @@ function detectSubtitleFormat(url = '', contentType = '') {
 function subtitleContentType(format) {
   if (format === 'ttml') return 'application/ttml+xml';
   return 'text/vtt';
+}
+
+function cleanupRelaySession(id) {
+  const session = relaySessions.get(id);
+  if (!session) return;
+  try {
+    session.stream.end();
+  } catch (_) {}
+  relaySessions.delete(id);
+}
+
+function createRelaySession(mimeType = 'video/webm') {
+  const id = Math.random().toString(36).slice(2);
+  const extension = mimeType.includes('webm') ? 'webm' : 'bin';
+  const session = {
+    id,
+    mimeType,
+    extension,
+    stream: new PassThrough({ highWaterMark: 8 * 1024 * 1024 }),
+    createdAt: Date.now()
+  };
+  relaySessions.set(id, session);
+  setTimeout(() => cleanupRelaySession(id), 30 * 60 * 1000);
+  return session;
 }
 
 function srtToVtt(text) {
@@ -480,13 +526,14 @@ function castToDevice(device, url, options = {}) {
         const activeTrackIds = subtitleTracks
           .filter(track => track.selected)
           .map(track => track.trackId);
+        const streamType = options.streamType || (castUrl.includes('/relay/') ? 'LIVE' : 'BUFFERED');
         console.log('[Cast] Using URL:', castUrl);
         client.launch(DefaultMediaReceiver, (err, player) => {
           if (err) return cleanup(err);
           const media = {
             contentId: castUrl,
             contentType,
-            streamType: 'BUFFERED'
+            streamType
           };
           if (subtitleTracks.length > 0) {
             media.tracks = subtitleTracks.map(({ selected, ...track }) => track);
@@ -569,6 +616,72 @@ const server = http.createServer(async (req, res) => {
     return handleSubtitle(req, res);
   }
 
+  if (req.method === 'POST' && req.url === '/relay/start') {
+    try {
+      const body = await readBody(req);
+      const mimeType = body.mimeType || 'video/webm';
+      const session = createRelaySession(mimeType);
+      return json(res, 200, {
+        id: session.id,
+        url: buildRelayUrl(session.id, session.extension),
+        mimeType: session.mimeType
+      });
+    } catch (e) {
+      return json(res, 500, { error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && req.url.startsWith('/relay/chunk')) {
+    try {
+      const reqUrl = new URL(req.url, `http://${req.headers.host}`);
+      const id = reqUrl.searchParams.get('id');
+      const done = reqUrl.searchParams.get('done') === '1';
+      const session = id ? relaySessions.get(id) : null;
+      if (!session) return json(res, 404, { error: 'Relay session not found' });
+      if (!done) {
+        const buffer = await readBinaryBody(req);
+        if (buffer.length > 0) {
+          session.stream.write(buffer);
+        }
+      } else {
+        session.stream.end();
+      }
+      return json(res, 200, { success: true });
+    } catch (e) {
+      return json(res, 500, { error: e.message });
+    }
+  }
+
+  if (req.method === 'GET' && req.url.startsWith('/relay/')) {
+    const reqUrl = new URL(req.url, `http://${req.headers.host}`);
+    const fileName = reqUrl.pathname.split('/').pop() || '';
+    const id = fileName.split('.')[0];
+    const session = relaySessions.get(id);
+    if (!session) return json(res, 404, { error: 'Relay session not found' });
+    res.writeHead(200, {
+      'Content-Type': session.mimeType,
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*'
+    });
+    session.stream.pipe(res);
+    req.on('close', () => {
+      try {
+        session.stream.unpipe(res);
+      } catch (_) {}
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/relay/stop') {
+    try {
+      const body = await readBody(req);
+      if (body.id) cleanupRelaySession(body.id);
+      return json(res, 200, { success: true });
+    } catch (e) {
+      return json(res, 500, { error: e.message });
+    }
+  }
+
   if (req.method === 'POST' && req.url === '/cast') {
     try {
       const body = await readBody(req);
@@ -578,6 +691,7 @@ const server = http.createServer(async (req, res) => {
       const cookie = body.cookie || '';
       const origin = body.origin || '';
       const subtitles = Array.isArray(body.subtitles) ? body.subtitles : [];
+      const streamType = body.streamType || '';
       const headerMap = toHeaderMap(body.headers || []);
       const baseHeaders = new Map();
       if (referer) baseHeaders.set('referer', referer);
@@ -620,7 +734,7 @@ const server = http.createServer(async (req, res) => {
       if (!device) return json(res, 404, { error: 'No devices found' });
       if (!device.port) device.port = 8009;
       if (!device.address && device.host) device.address = device.host;
-      await castToDevice(device, url, { useProxy, referer, cookie, origin, token, subtitles });
+      await castToDevice(device, url, { useProxy, referer, cookie, origin, token, subtitles, streamType });
       return json(res, 200, { success: true });
     } catch (e) {
       console.error('[Cast] Failed:', e?.message || e);
