@@ -59,7 +59,16 @@ async function refreshHelperStatus() {
     }
     throw lastError || new Error('Helper not reachable');
   } catch (e) {
-    if (helperStatusEl) helperStatusEl.textContent = 'Helper: not reachable';
+    let nativeError = '';
+    try {
+      const res = await browser.runtime.sendNativeMessage('chromecast_ultimate_helper', { type: 'ping' });
+      if (!res || !res.ok) nativeError = 'native host not responding';
+    } catch (err) {
+      nativeError = err?.message || 'native host error';
+    }
+    if (helperStatusEl) {
+      helperStatusEl.textContent = nativeError ? `Helper: not reachable (${nativeError})` : 'Helper: not reachable';
+    }
     if (helperDevicesEl) helperDevicesEl.textContent = '';
   }
 }
