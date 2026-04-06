@@ -22,9 +22,17 @@ function isDirectMediaUrl(url) {
   return typeof url === 'string' && (url.includes('.m3u8') || url.includes('.mp4'));
 }
 
-function shouldProxy(url) {
+function shouldProxy(url, headers = []) {
   if (!url) return false;
-  return !/youtube\.com|youtu\.be/i.test(url);
+  if (/youtube\.com|youtu\.be/i.test(url)) return false;
+  if (url.includes('.m3u8')) return true;
+  if (url.includes('.mp4')) {
+    return headers.some(h => {
+      const name = (h.name || '').toLowerCase();
+      return name === 'cookie' || name === 'authorization';
+    });
+  }
+  return true;
 }
 
 async function ensureHelperReady() {
@@ -170,7 +178,7 @@ async function castVideo(videoUrl) {
         type: 'castVideo',
         videoUrl: finalUrl,
         device: selectedDevice,
-        useProxy: shouldProxy(finalUrl),
+        useProxy: shouldProxy(finalUrl, headers),
         referer: tabUrl,
         headers
       });

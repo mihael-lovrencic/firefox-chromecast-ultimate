@@ -93,8 +93,13 @@
         setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 2000);
         return;
       }
-      const useProxy = shouldProxy(videoUrl);
-      browser.runtime.sendMessage({ type: 'discoverDevices' }).then(devices => {
+      browser.runtime.sendMessage({ type: 'getLastMediaRequest' }).then(lastReq => {
+        const headers = lastReq && lastReq.data && lastReq.data.url === videoUrl
+          ? (lastReq.data.headers || [])
+          : [];
+        const useProxy = shouldProxy(videoUrl, headers);
+        return browser.runtime.sendMessage({ type: 'discoverDevices' }).then(devices => ({ devices, headers, useProxy }));
+      }).then(({ devices, headers, useProxy }) => {
         if (!devices || devices.length === 0) {
           btn.textContent = 'NO';
           btn.style.background = '#f00';
@@ -113,7 +118,14 @@
             }
             device = devices[index];
           }
-          browser.runtime.sendMessage({ type: 'castVideo', videoUrl, device, useProxy, referer: window.location.href }).then(res => {
+          browser.runtime.sendMessage({
+            type: 'castVideo',
+            videoUrl,
+            device,
+            useProxy,
+            referer: window.location.href,
+            headers
+          }).then(res => {
             if (res && res.error) throw new Error(res.error);
             btn.textContent = 'CASTING';
             btn.style.background = '#34a853';
@@ -194,9 +206,16 @@
   });
   installUrlSniffer();
   
-  function shouldProxy(url) {
+  function shouldProxy(url, headers) {
     if (!url) return false;
     if (/youtube\.com|youtu\.be/i.test(url)) return false;
+    if (url.includes('.m3u8')) return true;
+    if (url.includes('.mp4')) {
+      return (headers || []).some(h => {
+        const name = (h.name || '').toLowerCase();
+        return name === 'cookie' || name === 'authorization';
+      });
+    }
     return true;
   }
   
