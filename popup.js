@@ -492,6 +492,7 @@ async function castVideo(videoUrl, subtitles = [], videoContext = null) {
           device: selectedDevice,
           useProxy: false,
           streamType: 'LIVE',
+          contentType: relay.mimeType,
           referer: refererUrl,
           headers: [],
           subtitles: []

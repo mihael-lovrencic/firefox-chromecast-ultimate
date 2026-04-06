@@ -521,13 +521,13 @@ function castToDevice(device, url, options = {}) {
         });
       } else {
         const castUrl = options.useProxy ? buildProxyUrl(url, options.token) : url;
-        const contentType = detectContentType(url);
+        const contentType = options.contentType || detectContentType(url);
         const subtitleTracks = normalizeSubtitleTracks(options.subtitles || [], options.token);
         const activeTrackIds = subtitleTracks
           .filter(track => track.selected)
           .map(track => track.trackId);
         const streamType = options.streamType || (castUrl.includes('/relay/') ? 'LIVE' : 'BUFFERED');
-        console.log('[Cast] Using URL:', castUrl);
+        console.log('[Cast] Using URL:', castUrl, 'contentType=', contentType, 'streamType=', streamType);
         client.launch(DefaultMediaReceiver, (err, player) => {
           if (err) return cleanup(err);
           const media = {
@@ -692,6 +692,7 @@ const server = http.createServer(async (req, res) => {
       const origin = body.origin || '';
       const subtitles = Array.isArray(body.subtitles) ? body.subtitles : [];
       const streamType = body.streamType || '';
+      const contentType = body.contentType || '';
       const headerMap = toHeaderMap(body.headers || []);
       const baseHeaders = new Map();
       if (referer) baseHeaders.set('referer', referer);
@@ -734,7 +735,7 @@ const server = http.createServer(async (req, res) => {
       if (!device) return json(res, 404, { error: 'No devices found' });
       if (!device.port) device.port = 8009;
       if (!device.address && device.host) device.address = device.host;
-      await castToDevice(device, url, { useProxy, referer, cookie, origin, token, subtitles, streamType });
+      await castToDevice(device, url, { useProxy, referer, cookie, origin, token, subtitles, streamType, contentType });
       return json(res, 200, { success: true });
     } catch (e) {
       console.error('[Cast] Failed:', e?.message || e);

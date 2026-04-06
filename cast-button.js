@@ -144,7 +144,9 @@
     if (!video || typeof video.captureStream !== 'function' || typeof MediaRecorder === 'undefined') {
       throw new Error('Browser relay is not supported on this page');
     }
-    const stream = video.captureStream();
+    const stream = typeof video.mozCaptureStream === 'function'
+      ? video.mozCaptureStream()
+      : video.captureStream();
     const mimeType = chooseRelayMimeType();
     const relay = await fetchHelperJson('/relay/start', {
       method: 'POST',
@@ -205,6 +207,7 @@
       device,
       useProxy: false,
       streamType: 'LIVE',
+      contentType: relay.mimeType,
       referer: window.location.href,
       headers: [],
       subtitles: []

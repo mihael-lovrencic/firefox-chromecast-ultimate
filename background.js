@@ -216,6 +216,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
           device,
           useProxy: !!message.useProxy,
           streamType: message.streamType || '',
+          contentType: message.contentType || '',
           referer: message.referer || '',
           cookie,
           origin,
