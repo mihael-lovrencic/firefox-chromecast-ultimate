@@ -336,7 +336,9 @@ function getVideoContextsScript() {
       src: v.currentSrc || v.src,
       width: v.offsetWidth,
       height: v.offsetHeight,
-      subtitles: collectSubtitles(v)
+      subtitles: collectSubtitles(v),
+      pageUrl: location.href,
+      pageTitle: document.title
     })).filter(v => v.src || (Array.isArray(v.subtitles) && v.subtitles.length > 0));
   };
 }
@@ -392,10 +394,17 @@ async function loadVideoContexts() {
     return [];
   }
   const results = await browser.scripting.executeScript({
-    target: { tabId: tab.id },
+    target: { tabId: tab.id, allFrames: true },
     func: getVideoContextsScript()
   });
-  currentVideoContexts = results[0]?.result || [];
+  currentVideoContexts = (results || []).flatMap(result => {
+    const items = Array.isArray(result?.result) ? result.result : [];
+    return items.map(item => ({
+      ...item,
+      frameId: result.frameId,
+      tabUrl: tab.url || ''
+    }));
+  });
   if (currentVideoIndex >= currentVideoContexts.length) {
     currentVideoIndex = 0;
   }
@@ -440,7 +449,7 @@ async function resolveVideoUrl(initialUrl, tabUrl) {
   return { finalUrl, headers };
 }
 
-async function castVideo(videoUrl, subtitles = []) {
+async function castVideo(videoUrl, subtitles = [], videoContext = null) {
   if (!selectedDevice && currentMode === 'standalone') {
     setStatus('Please select a Chromecast first');
     return;
@@ -451,17 +460,18 @@ async function castVideo(videoUrl, subtitles = []) {
   try {
     const tab = await getActiveTab();
     const tabUrl = tab?.url || '';
+    const refererUrl = videoContext?.pageUrl || tabUrl;
 
     if (currentMode === 'standalone') {
       await ensureHelperReady();
-      const { finalUrl, headers } = await resolveVideoUrl(videoUrl, tabUrl);
+      const { finalUrl, headers } = await resolveVideoUrl(videoUrl, refererUrl);
       const chosenSubtitles = applySubtitleChoice(subtitles);
       const response = await browser.runtime.sendMessage({
         type: 'castVideo',
         videoUrl: finalUrl,
         device: selectedDevice,
         useProxy: shouldProxy(finalUrl, headers),
-        referer: tabUrl,
+        referer: refererUrl,
         headers,
         subtitles: chosenSubtitles
       });
@@ -517,14 +527,21 @@ async function scanVideos() {
       const ipSpan = document.createElement('span');
       ipSpan.className = 'device-ip';
       const subtitleCount = Array.isArray(video.subtitles) ? video.subtitles.length : 0;
-      ipSpan.textContent = `${video.width}x${video.height}${subtitleCount ? ` • ${subtitleCount} subtitle${subtitleCount === 1 ? '' : 's'}` : ''}`;
+      const sourceHost = (() => {
+        try {
+          return new URL(video.pageUrl || video.tabUrl || '').hostname;
+        } catch (_) {
+          return '';
+        }
+      })();
+      ipSpan.textContent = `${video.width}x${video.height}${subtitleCount ? ` • ${subtitleCount} subtitle${subtitleCount === 1 ? '' : 's'}` : ''}${sourceHost ? ` • ${sourceHost}` : ''}`;
       btn.appendChild(nameSpan);
       btn.appendChild(ipSpan);
       btn.onmouseenter = () => setActiveVideoIndex(index);
       btn.onfocus = () => setActiveVideoIndex(index);
       btn.onclick = () => {
         setActiveVideoIndex(index);
-        castVideo(video.src, video.subtitles || []);
+        castVideo(video.src, video.subtitles || [], video);
       };
       videosList.appendChild(btn);
     });
@@ -576,7 +593,7 @@ document.getElementById('castCurrentBtn').onclick = async () => {
   const videos = await loadVideoContexts();
   const activeVideo = getActiveVideoContext();
   if (activeVideo) {
-    castVideo(activeVideo.src || tab.url, activeVideo.subtitles || []);
+    castVideo(activeVideo.src || tab.url, activeVideo.subtitles || [], activeVideo);
   } else if (tab.url) {
     castVideo(tab.url, []);
   }

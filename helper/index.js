@@ -590,6 +590,24 @@ const server = http.createServer(async (req, res) => {
       setTimeout(() => proxyHeadersByToken.delete(token), 30 * 60 * 1000);
       console.log('[Cast] url=', url, 'referer=', referer, 'useProxy=', useProxy);
       if (!url) return json(res, 400, { error: 'Missing url' });
+      if (useProxy && !isYouTubeUrl(url)) {
+        let preflight;
+        try {
+          preflight = await proxyFetch(url, merged);
+        } catch (err) {
+          return json(res, 502, { error: `Upstream fetch failed: ${err.message}` });
+        }
+        const upstreamType = preflight.headers.get('content-type') || '';
+        console.log('[Cast] Preflight status=', preflight.status, 'type=', upstreamType);
+        try {
+          if (preflight.body && typeof preflight.body.cancel === 'function') {
+            await preflight.body.cancel();
+          }
+        } catch (_) {}
+        if (!preflight.ok) {
+          return json(res, 502, { error: `Stream host blocked cast stream (${preflight.status})` });
+        }
+      }
       let device = body.device;
       const devices = await discoverDevices();
       if (!device) {
