@@ -23,14 +23,39 @@
     .mode-toggle { display: flex; gap: 5px; margin-bottom: 10px; }
     .mode-toggle button { flex: 1; padding: 6px; font-size: 11px; }
     .mode-toggle button.active { background: #34a853; }
-    .discovered-device { padding: 8px; background: #e8f0fe; border-radius: 4px; margin: 4px 0; font-size: 11px; cursor: pointer; }
-    .discovered-device:hover { background: #d0e1ff; }
     .casting-indicator { display: inline-block; width: 10px; height: 10px; background: #34a853; border-radius: 50%; margin-right: 5px; animation: pulse 2s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .section { display: none; }
     .section.active { display: block; }
     .control-btns { display: flex; gap: 5px; }
     .control-btns button { flex: 1; padding: 6px; font-size: 11px; }
+    .device-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 15px;
+      background: linear-gradient(135deg, #4285f4, #34a853);
+      border: none;
+      border-radius: 12px;
+      color: white;
+      cursor: pointer;
+      margin: 6px 0;
+      width: 100%;
+      text-align: left;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 2px 6px rgba(66, 133, 244, 0.3);
+    }
+    .device-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);
+    }
+    .device-btn svg { flex-shrink: 0; }
+    .device-btn .device-name { font-weight: bold; font-size: 14px; flex-grow: 1; }
+    .device-btn .device-ip { font-size: 11px; opacity: 0.8; }
+    .device-btn.selected {
+      background: linear-gradient(135deg, #34a853, #0f9d58);
+      box-shadow: 0 4px 12px rgba(52, 168, 83, 0.4);
+    }
   </style>
 </head>
 <body>
