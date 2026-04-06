@@ -121,7 +121,7 @@
         setTimeout(() => resetButton(btn, 'Cast'), 2000);
         return;
       }
-      const subtitles = collectSubtitles(video);
+      const subtitles = collectSubtitles(video).filter(track => track.selected);
       browser.runtime.sendMessage({ type: 'getLastMediaRequest' }).then(lastReq => {
         const headers = lastReq && lastReq.data && lastReq.data.url === videoUrl
           ? (lastReq.data.headers || [])

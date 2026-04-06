@@ -480,9 +480,6 @@ function castToDevice(device, url, options = {}) {
         const activeTrackIds = subtitleTracks
           .filter(track => track.selected)
           .map(track => track.trackId);
-        if (activeTrackIds.length === 0 && subtitleTracks.length > 0) {
-          activeTrackIds.push(subtitleTracks[0].trackId);
-        }
         console.log('[Cast] Using URL:', castUrl);
         client.launch(DefaultMediaReceiver, (err, player) => {
           if (err) return cleanup(err);

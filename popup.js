@@ -182,18 +182,18 @@ function applySubtitleChoice(subtitles = []) {
     return [];
   }
   if (choice === 'off') {
-    return tracks.map(track => ({ ...track, selected: false }));
+    return [];
   }
   if (choice.startsWith('track:')) {
     const selectedIndex = Number.parseInt(choice.slice(6), 10);
     if (Number.isInteger(selectedIndex) && selectedIndex >= 0) {
-      return tracks.map((track, index) => ({ ...track, selected: index === selectedIndex }));
+      const selectedTrack = tracks[selectedIndex];
+      return selectedTrack ? [{ ...selectedTrack, selected: true }] : [];
     }
   }
-  return tracks.map((track, index) => ({
-    ...track,
-    selected: track.selected || (!tracks.some(item => item.selected) && index === 0)
-  }));
+  return tracks
+    .filter(track => track.selected)
+    .map(track => ({ ...track, selected: true }));
 }
 
 function renderSubtitlePicker(subtitles = []) {
@@ -233,8 +233,6 @@ function renderSubtitlePicker(subtitles = []) {
   const validValues = new Set(Array.from(subtitleSelectEl.options).map(option => option.value));
   if (validValues.has(previousValue)) {
     subtitleSelectEl.value = previousValue;
-  } else if (subtitles.some(track => track.selected)) {
-    subtitleSelectEl.value = `track:${subtitles.findIndex(track => track.selected)}`;
   } else {
     subtitleSelectEl.value = 'auto';
   }
