@@ -3,7 +3,8 @@ const { spawn } = require('child_process');
 const HELPER_URL = 'http://127.0.0.1:4269';
 const SAMPLE_URL = process.env.CAST_TEST_URL || 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 const DEVICE_IP = process.env.DEVICE_IP || '';
-const DEVICE_NAME = process.env.DEVICE_NAME || '';
+const DEFAULT_DEVICE_NAME = 'OLED55C57LA';
+const DEVICE_NAME = process.env.DEVICE_NAME || DEFAULT_DEVICE_NAME;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -58,6 +59,7 @@ async function run() {
 
     const device = pickDevice(devices);
     if (!device) throw new Error('Selected device not found');
+    console.log(`Using device: ${device.name || device.address}`);
 
     await fetchJson('/cast', {
       method: 'POST',
