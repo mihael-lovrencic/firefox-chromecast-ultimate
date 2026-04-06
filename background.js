@@ -100,6 +100,9 @@ async function waitForHelperReady() {
 }
 
 async function ensureHelperRunning() {
+  if (await isHelperReachable()) {
+    return true;
+  }
   try {
     const response = await browser.runtime.sendNativeMessage(NATIVE_HOST_NAME, { type: 'ensureHelper' });
     if (!response || response.ok !== true) {
@@ -109,6 +112,7 @@ async function ensureHelperRunning() {
     if (!ready) {
       throw new Error('Helper not reachable after startup');
     }
+    return true;
   } catch (e) {
     console.warn('[Native] Helper not available:', e?.message || e);
     throw e;

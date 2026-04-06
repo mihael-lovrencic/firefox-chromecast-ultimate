@@ -128,7 +128,11 @@
         const useProxy = shouldProxy(videoUrl, headers);
         return browser.runtime.sendMessage({ type: 'discoverDevices' }).then(devices => ({ devices, headers, useProxy }));
       }).then(({ devices, headers, useProxy }) => {
-        if (!devices || devices.length === 0) {
+        if (!Array.isArray(devices)) {
+          const message = devices && devices.error ? devices.error : 'Device scan failed';
+          setButtonVisual(btn, 'error', message);
+          setTimeout(() => resetButton(btn, 'Cast'), 2500);
+        } else if (devices.length === 0) {
           setButtonVisual(btn, 'error', 'No devices');
           setTimeout(() => resetButton(btn, 'Cast'), 2000);
         } else {

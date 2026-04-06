@@ -1,7 +1,7 @@
 {
   "name": "chromecast_ultimate_helper",
   "description": "Chromecast Ultimate native helper launcher",
-  "path": "C:\\\\Projekti\\\\firefox-chromecast-ultimate\\\\native-messaging\\\\host.js",
+  "path": "C:\\Projekti\\firefox-chromecast-ultimate\\native-messaging\\host.js",
   "type": "stdio",
   "allowed_extensions": ["chromecast-ultimate@firefox"]
 }
