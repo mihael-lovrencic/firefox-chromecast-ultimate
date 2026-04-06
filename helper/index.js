@@ -11,6 +11,7 @@ const sessions = new Map();
 const proxyHeadersByToken = new Map();
 const inlineSubtitlesById = new Map();
 const relaySessions = new Map();
+const hlsRelaySessions = new Map();
 const LOCAL_IP = getLocalIp() || '127.0.0.1';
 
 function json(res, status, payload) {
@@ -139,6 +140,10 @@ function buildRelayUrl(id, extension = 'webm') {
   return `http://${LOCAL_IP}:${PORT}/relay/${id}.${extension}`;
 }
 
+function buildHlsRelayUrl(id, rootUrl) {
+  return `http://${LOCAL_IP}:${PORT}/relay/hls/${id}/fetch?u=${encodeURIComponent(rootUrl)}`;
+}
+
 function isM3U8(url, contentType) {
   if (contentType && contentType.toLowerCase().includes('mpegurl')) return true;
   return url.toLowerCase().includes('.m3u8');
@@ -183,6 +188,69 @@ function createRelaySession(mimeType = 'video/webm') {
   relaySessions.set(id, session);
   setTimeout(() => cleanupRelaySession(id), 30 * 60 * 1000);
   return session;
+}
+
+function createHlsRelaySession(rootUrl) {
+  const id = Math.random().toString(36).slice(2);
+  const session = {
+    id,
+    rootUrl,
+    resources: new Map(),
+    createdAt: Date.now()
+  };
+  hlsRelaySessions.set(id, session);
+  setTimeout(() => hlsRelaySessions.delete(id), 30 * 60 * 1000);
+  return session;
+}
+
+function storeHlsRelayResource(session, url, body, contentType = '') {
+  session.resources.set(url, {
+    body: Buffer.isBuffer(body) ? body : Buffer.from(body),
+    contentType,
+    updatedAt: Date.now()
+  });
+}
+
+async function waitForHlsResource(session, url, timeoutMs = 12000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const resource = session.resources.get(url);
+    if (resource) return resource;
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+  return null;
+}
+
+async function serveHlsRelayResource(session, targetUrl, res) {
+  const resource = await waitForHlsResource(session, targetUrl);
+  if (!resource) {
+    return json(res, 404, { error: 'Relay resource not available yet' });
+  }
+  const contentType = resource.contentType || '';
+  const isPlaylist = isM3U8(targetUrl, contentType);
+  if (isPlaylist) {
+    const text = resource.body.toString('utf8');
+    const rewritten = text.split('\n').map(line => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return line;
+      const absolute = new URL(trimmed, targetUrl).toString();
+      return buildHlsRelayUrl(session.id, absolute);
+    }).join('\n');
+    res.writeHead(200, {
+      'Content-Type': contentType || 'application/vnd.apple.mpegurl',
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.end(rewritten);
+    return;
+  }
+
+  res.writeHead(200, {
+    'Content-Type': contentType || 'application/octet-stream',
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': '*'
+  });
+  res.end(resource.body);
 }
 
 function srtToVtt(text) {
@@ -614,6 +682,49 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && req.url.startsWith('/subtitle')) {
     return handleSubtitle(req, res);
+  }
+
+  if (req.method === 'POST' && req.url === '/relay/hls/start') {
+    try {
+      const body = await readBody(req);
+      const rootUrl = body.rootUrl || '';
+      if (!rootUrl) return json(res, 400, { error: 'Missing rootUrl' });
+      const session = createHlsRelaySession(rootUrl);
+      return json(res, 200, {
+        id: session.id,
+        url: buildHlsRelayUrl(session.id, session.rootUrl)
+      });
+    } catch (e) {
+      return json(res, 500, { error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && req.url.startsWith('/relay/hls/resource')) {
+    try {
+      const reqUrl = new URL(req.url, `http://${req.headers.host}`);
+      const id = reqUrl.searchParams.get('id') || '';
+      const resourceUrl = req.headers['x-resource-url'] || '';
+      const contentType = req.headers['x-content-type'] || '';
+      const session = hlsRelaySessions.get(id);
+      if (!session) return json(res, 404, { error: 'HLS relay session not found' });
+      if (!resourceUrl) return json(res, 400, { error: 'Missing resource URL' });
+      const buffer = await readBinaryBody(req);
+      storeHlsRelayResource(session, resourceUrl, buffer, contentType);
+      return json(res, 200, { success: true });
+    } catch (e) {
+      return json(res, 500, { error: e.message });
+    }
+  }
+
+  if (req.method === 'GET' && req.url.startsWith('/relay/hls/')) {
+    const reqUrl = new URL(req.url, `http://${req.headers.host}`);
+    const parts = reqUrl.pathname.split('/').filter(Boolean);
+    const id = parts[2] || '';
+    const targetUrl = reqUrl.searchParams.get('u') || '';
+    const session = hlsRelaySessions.get(id);
+    if (!session) return json(res, 404, { error: 'HLS relay session not found' });
+    if (!targetUrl) return json(res, 400, { error: 'Missing target URL' });
+    return serveHlsRelayResource(session, targetUrl, res);
   }
 
   if (req.method === 'POST' && req.url === '/relay/start') {

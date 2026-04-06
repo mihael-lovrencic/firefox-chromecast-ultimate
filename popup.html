@@ -3,124 +3,151 @@
 <head>
   <meta charset="utf-8">
   <style>
-    body { font-family: Arial, sans-serif; width: 380px; padding: 10px; margin: 0; background: #1a1a2e; color: white; }
-    h3 { margin: 0 0 10px 0; background: linear-gradient(135deg, #4285f4, #34a853); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    h4 { margin: 10px 0 5px 0; color: #aaa; font-size: 14px; }
-    button { padding: 10px; cursor: pointer; background: #4285f4; color: white; border: none; border-radius: 8px; font-weight: bold; transition: all 0.3s; }
-    button:hover { background: #3367d6; transform: translateY(-2px); }
-    button:disabled { background: #555; cursor: not-allowed; transform: none; }
-    .status { font-size: 11px; color: #888; margin-top: 5px; padding: 8px; background: #16213e; border-radius: 4px; }
-    .mode-toggle { display: flex; gap: 5px; margin-bottom: 10px; }
-    .mode-toggle button { flex: 1; padding: 8px; font-size: 12px; }
-    .mode-toggle button.active { background: linear-gradient(135deg, #34a853, #0f9d58); }
-    .device-btn { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: linear-gradient(135deg, #4285f4, #34a853); border-radius: 12px; color: white; cursor: pointer; margin: 8px 0; width: 100%; text-align: left; border: none; box-shadow: 0 4px 15px rgba(66, 133, 244, 0.3); transition: all 0.3s; }
-    .device-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(66, 133, 244, 0.4); }
-    .device-btn.selected { background: linear-gradient(135deg, #34a853, #0f9d58); box-shadow: 0 4px 15px rgba(52, 168, 83, 0.4); }
-    .device-btn svg { flex-shrink: 0; }
-    .device-btn .device-name { font-weight: bold; font-size: 14px; flex-grow: 1; }
-    .device-btn .device-ip { font-size: 11px; opacity: 0.8; }
-    hr { margin: 15px 0; border: none; border-top: 1px solid #333; }
-    .control-btns { display: flex; gap: 8px; margin: 10px 0; }
-    .control-btns button { flex: 1; padding: 10px; font-size: 12px; background: #333; }
-    .control-btns button:hover { background: #444; }
-    .casting { animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-    .section { display: none; }
-    .section.active { display: block; }
-    .loading { display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .spinner { width: 30px; height: 30px; border: 3px solid #333; border-top-color: #4285f4; border-radius: 50%; animation: spin 1s linear infinite; }
-    .debug-panel { margin-top: 10px; padding: 10px; background: #101827; border: 1px solid #24324d; border-radius: 10px; }
-    .debug-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-    .debug-head h4 { margin: 0; color: #d6e4ff; }
-    .debug-head button { padding: 6px 10px; font-size: 11px; background: #243b63; }
-    .debug-grid { display: grid; gap: 8px; }
-    .debug-item { background: #16213e; border-radius: 8px; padding: 8px; }
-    .debug-label { display: block; font-size: 10px; letter-spacing: 0.08em; color: #7ea4dc; text-transform: uppercase; margin-bottom: 4px; }
-    .debug-value { font-size: 12px; color: #f4f7fb; word-break: break-word; }
-    .debug-value.mono { font-family: Consolas, Monaco, monospace; font-size: 11px; }
-    .subtitle-picker { margin-top: 10px; padding: 10px; background: #16213e; border-radius: 10px; }
-    .subtitle-picker label { display: block; font-size: 12px; color: #9ab7e0; margin-bottom: 6px; }
-    .subtitle-picker select { width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid #2c3d5f; background: #0f1728; color: white; }
-    .subtitle-picker small { display: block; margin-top: 6px; color: #7f8aa3; font-size: 11px; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; width: 360px; padding: 0; margin: 0; background: linear-gradient(180deg, #0f0c29 0%, #302b63 50%, #24243e 100%); color: white; min-height: 450px; }
+    
+    .header { padding: 24px 20px; text-align: center; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%); position: relative; overflow: hidden; }
+    .header::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%); }
+    .header h1 { margin: 0; font-size: 22px; font-weight: 700; position: relative; }
+    .header p { margin: 6px 0 0; font-size: 13px; opacity: 0.9; position: relative; }
+    
+    .status-bar { padding: 14px 20px; background: rgba(0,0,0,0.3); display: flex; align-items: center; gap: 12px; }
+    .status-dot { width: 12px; height: 12px; border-radius: 50%; background: #34a853; flex-shrink: 0; }
+    .status-dot.searching { animation: pulse 1.5s infinite; background: #fbbc04; }
+    .status-dot.error { background: #ea4335; }
+    .status-text { font-size: 14px; color: #ccc; }
+    
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.9); } }
+    
+    .content { padding: 20px; }
+    
+    .mode-toggle { display: flex; background: rgba(255,255,255,0.1); border-radius: 12px; padding: 4px; margin-bottom: 24px; }
+    .mode-toggle button { flex: 1; padding: 12px; background: transparent; border: none; border-radius: 10px; color: #888; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s; }
+    .mode-toggle button.active { background: linear-gradient(135deg, #4285f4, #34a853); color: white; }
+    
+    .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #888; margin-bottom: 16px; font-weight: 600; }
+    
+    .device-card {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .device-card:hover { background: rgba(255,255,255,0.12); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+    .device-card.selected { background: linear-gradient(135deg, rgba(66,133,244,0.25), rgba(52,168,83,0.25)); border-color: #4285f4; box-shadow: 0 0 20px rgba(66,133,244,0.3); }
+    
+    .device-icon { width: 52px; height: 52px; background: linear-gradient(135deg, #4285f4, #34a853); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 15px rgba(66,133,244,0.4); }
+    .device-icon svg { width: 28px; height: 28px; fill: white; }
+    .device-info { flex: 1; min-width: 0; }
+    .device-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .device-ip { font-size: 12px; color: #999; }
+    .device-check { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.3s; }
+    .device-card.selected .device-check { background: #34a853; border-color: #34a853; }
+    .device-check svg { width: 16px; height: 16px; fill: transparent; }
+    .device-card.selected .device-check svg { fill: white; }
+    
+    .btn-scan {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #4285f4, #34a853);
+      border: none;
+      border-radius: 14px;
+      color: white;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 15px rgba(66,133,244,0.4);
+    }
+    .btn-scan:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(66,133,244,0.5); }
+    .btn-scan svg { width: 20px; height: 20px; fill: currentColor; }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .empty-icon { width: 80px; height: 80px; margin: 0 auto 20px; background: rgba(255,255,255,0.05); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .empty-icon svg { width: 40px; height: 40px; fill: #555; }
+    .empty-state h3 { margin: 0 0 8px; font-size: 18px; color: #777; }
+    .empty-state p { margin: 0; font-size: 13px; color: #555; line-height: 1.5; }
+    
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #4285f4;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 40px auto;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
+    
+    .android-section { display: none; }
+    .android-section.active { display: block; }
+    .input-field { width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-size: 14px; margin-bottom: 12px; }
+    .input-field::placeholder { color: #666; }
+    .input-field:focus { outline: none; border-color: #4285f4; }
   </style>
 </head>
 <body>
-  <h3>Chromecast Ultimate</h3>
-  <div id="status" class="status">Ready</div>
-
-  <div class="mode-toggle">
-    <button id="modeStandalone" class="active">Standalone</button>
-    <button id="modeAndroid">Android App</button>
+  <div class="header">
+    <h1>Chromecast Ultimate</h1>
+    <p>Cast videos to your TV</p>
   </div>
-
-  <div id="standaloneSection" class="section active">
-    <div id="devicesContainer">
-      <div id="loadingIndicator" class="loading">
-        <div class="spinner"></div>
-      </div>
-      <div id="discoveredDevices"></div>
+  
+  <div class="status-bar">
+    <div id="statusDot" class="status-dot"></div>
+    <span id="statusText" class="status-text">Ready to scan</span>
+  </div>
+  
+  <div class="content">
+    <div class="mode-toggle">
+      <button id="modeStandalone" class="active">Standalone</button>
+      <button id="modeAndroid">Android App</button>
     </div>
-    <button id="scanBtn" style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, #4285f4, #34a853);">
-      Scan for Chromecasts
-    </button>
-  </div>
-
-  <div id="androidSection" class="section">
-    <label style="color: #aaa; font-size: 12px;">Server URL (Android device IP):</label>
-    <input type="text" id="serverUrl" placeholder="http://192.168.1.100:5000" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #333; background: #16213e; color: white; margin-top: 5px;">
-    <button id="connectBtn" style="width: 100%; margin-top: 8px; background: #34a853;">Connect</button>
-  </div>
-
-  <hr>
-
-  <button id="scanVideosBtn" style="width: 100%; background: #333;">Find Videos on Page</button>
-  <div id="videosList"></div>
-
-  <button id="castCurrentBtn" style="width: 100%; background: linear-gradient(135deg, #fbbc04, #ff6d00); margin-top: 10px;">
-    Cast Current Page
-  </button>
-
-  <div class="subtitle-picker">
-    <label for="subtitleSelect">Subtitle Track</label>
-    <select id="subtitleSelect">
-      <option value="auto">Auto</option>
-      <option value="off">Off</option>
-    </select>
-    <small id="subtitleHint">No subtitles detected yet.</small>
-  </div>
-
-  <div class="debug-panel">
-    <div class="debug-head">
-      <h4>Capture Debug</h4>
-      <button id="refreshDebugBtn">Refresh</button>
+    
+    <div id="standaloneSection">
+      <div class="section-title">Select a Device</div>
+      
+      <div id="loadingState" style="display: none;">
+        <div class="loading-spinner"></div>
+      </div>
+      
+      <div id="emptyState" style="display: none;">
+        <div class="empty-state">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          </div>
+          <h3>No Devices Found</h3>
+          <p>Make sure your Chromecast is powered on and connected to the same network</p>
+        </div>
+      </div>
+      
+      <div id="devicesList"></div>
+      
+      <button id="scanBtn" class="btn-scan">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        Scan for Devices
+      </button>
     </div>
-    <div class="debug-grid">
-      <div class="debug-item">
-        <span class="debug-label">Page</span>
-        <div id="debugTabUrl" class="debug-value mono">-</div>
-      </div>
-      <div class="debug-item">
-        <span class="debug-label">Captured Stream</span>
-        <div id="debugMediaUrl" class="debug-value mono">-</div>
-      </div>
-      <div class="debug-item">
-        <span class="debug-label">Proxy Decision</span>
-        <div id="debugProxy" class="debug-value">-</div>
-      </div>
-      <div class="debug-item">
-        <span class="debug-label">Captured Headers</span>
-        <div id="debugHeaders" class="debug-value mono">-</div>
-      </div>
+    
+    <div id="androidSection" class="android-section">
+      <div class="section-title">Connect to Server</div>
+      <input type="text" id="serverUrl" class="input-field" placeholder="http://192.168.1.100:5000">
+      <button id="connectBtn" class="btn-scan" style="background: linear-gradient(135deg, #34a853, #0f9d58);">
+        Connect
+      </button>
     </div>
-  </div>
-
-  <hr>
-
-  <div class="control-btns">
-    <button id="playBtn">Play</button>
-    <button id="pauseBtn">Pause</button>
-    <button id="stopBtn">Stop</button>
   </div>
 
   <script src="popup.js"></script>
