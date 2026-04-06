@@ -1,6 +1,7 @@
 let currentMode = localStorage.getItem('castMode') || 'standalone';
 let selectedDevice = null;
 let serverUrl = localStorage.getItem('serverUrl') || '';
+const POPUP_HELPER_URLS = ['http://localhost:4269', 'http://127.0.0.1:4269'];
 
 const statusEl = document.getElementById('status');
 const discoveredDevicesContainer = document.getElementById('discoveredDevices');
@@ -43,6 +44,22 @@ function shouldProxy(url, headers = []) {
   return true;
 }
 
+async function fetchHelperJson(path) {
+  let lastError = null;
+  for (const base of POPUP_HELPER_URLS) {
+    try {
+      const response = await fetch(`${base}${path}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('Helper not reachable');
+}
+
 async function ensureHelperReady() {
   try {
     const res = await browser.runtime.sendMessage({ type: 'ensureHelper' });
@@ -50,8 +67,27 @@ async function ensureHelperReady() {
       throw new Error(res.error);
     }
   } catch (error) {
-    throw new Error(error.message || 'Helper not reachable');
+    try {
+      await fetchHelperJson('/status');
+      return;
+    } catch (_) {
+      throw new Error(error.message || 'Helper not reachable');
+    }
   }
+}
+
+async function discoverDevicesWithFallback() {
+  try {
+    const devices = await browser.runtime.sendMessage({ type: 'discoverDevices' });
+    if (Array.isArray(devices)) {
+      return devices;
+    }
+    if (devices && devices.error) {
+      throw new Error(devices.error);
+    }
+  } catch (_) {
+  }
+  return fetchHelperJson('/devices');
 }
 
 async function scanForChromecasts() {
@@ -64,7 +100,7 @@ async function scanForChromecasts() {
       await ensureHelperReady();
     }
 
-    const devices = await browser.runtime.sendMessage({ type: 'discoverDevices' });
+    const devices = await discoverDevicesWithFallback();
     showLoading(false);
 
     if (!devices || devices.error) {
