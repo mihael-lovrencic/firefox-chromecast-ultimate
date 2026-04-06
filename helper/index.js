@@ -72,6 +72,13 @@ function discoverDevices(timeoutMs = DISCOVERY_TIMEOUT_MS) {
 
 function detectContentType(url) {
   const lower = url.toLowerCase();
+  try {
+    const parsed = new URL(url);
+    const embedded = parsed.searchParams.get('url');
+    if (embedded && embedded !== url) {
+      return detectContentType(embedded);
+    }
+  } catch (_) {}
   if (lower.endsWith('.m3u8')) return 'application/x-mpegURL';
   if (lower.endsWith('.mpd')) return 'application/dash+xml';
   if (lower.endsWith('.webm')) return 'video/webm';
@@ -344,12 +351,13 @@ function castToDevice(device, url, options = {}) {
         });
       } else {
         const castUrl = options.useProxy ? buildProxyUrl(url, options.token) : url;
+        const contentType = detectContentType(url);
         console.log('[Cast] Using URL:', castUrl);
         client.launch(DefaultMediaReceiver, (err, player) => {
           if (err) return cleanup(err);
           const media = {
             contentId: castUrl,
-            contentType: detectContentType(castUrl),
+            contentType,
             streamType: 'BUFFERED'
           };
           player.load(media, { autoplay: true }, loadErr => {
