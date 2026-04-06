@@ -121,6 +121,7 @@
         setTimeout(() => resetButton(btn, 'Cast'), 2000);
         return;
       }
+      const subtitles = collectSubtitles(video);
       browser.runtime.sendMessage({ type: 'getLastMediaRequest' }).then(lastReq => {
         const headers = lastReq && lastReq.data && lastReq.data.url === videoUrl
           ? (lastReq.data.headers || [])
@@ -155,7 +156,8 @@
             device,
             useProxy,
             referer: window.location.href,
-            headers
+            headers,
+            subtitles
           }).then(res => {
             if (res && res.error) throw new Error(res.error);
             setButtonVisual(btn, 'success', `Connected to ${device.name || device.address}`);
@@ -299,6 +301,88 @@
 
   function looksBase64(val) {
     return typeof val === 'string' && val.length >= 8 && /^[A-Za-z0-9+/=_-]+$/.test(val);
+  }
+
+  function inferSubtitleFormat(url) {
+    const lower = String(url || '').toLowerCase();
+    if (lower.endsWith('.srt')) return 'srt';
+    if (lower.endsWith('.ttml') || lower.endsWith('.dfxp')) return 'ttml';
+    return 'vtt';
+  }
+
+  function formatCueTime(seconds) {
+    const totalMs = Math.max(0, Math.round(Number(seconds || 0) * 1000));
+    const hours = Math.floor(totalMs / 3600000);
+    const minutes = Math.floor((totalMs % 3600000) / 60000);
+    const secs = Math.floor((totalMs % 60000) / 1000);
+    const ms = totalMs % 1000;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+  }
+
+  function serializeTrackToVtt(textTrack) {
+    try {
+      const cues = Array.from(textTrack?.cues || []);
+      if (cues.length === 0) return '';
+      let vtt = 'WEBVTT\n\n';
+      cues.forEach((cue, index) => {
+        const text = String(cue.text || '').trim();
+        if (!text) return;
+        vtt += `${cue.id || index + 1}\n`;
+        vtt += `${formatCueTime(cue.startTime)} --> ${formatCueTime(cue.endTime)}\n`;
+        vtt += `${text}\n\n`;
+      });
+      return vtt;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function collectSubtitles(video) {
+    const subtitles = [];
+    const seen = new Set();
+
+    Array.from(video.querySelectorAll('track')).forEach((trackEl, index) => {
+      const kind = (trackEl.kind || '').toLowerCase();
+      if (kind !== 'subtitles' && kind !== 'captions') return;
+      const src = trackEl.src || trackEl.getAttribute('src') || '';
+      const absoluteUrl = src ? new URL(src, document.baseURI).toString() : '';
+      const textTrack = trackEl.track;
+      const inlineVtt = !absoluteUrl ? serializeTrackToVtt(textTrack) : '';
+      if (!absoluteUrl && !inlineVtt) return;
+      const key = absoluteUrl || `${trackEl.label || textTrack?.label || ''}:${trackEl.srclang || textTrack?.language || ''}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      subtitles.push({
+        url: absoluteUrl,
+        inlineVtt,
+        label: trackEl.label || textTrack?.label || `Subtitle ${index + 1}`,
+        language: trackEl.srclang || textTrack?.language || '',
+        kind,
+        selected: !!trackEl.default || textTrack?.mode === 'showing',
+        format: absoluteUrl ? inferSubtitleFormat(absoluteUrl) : 'vtt'
+      });
+    });
+
+    Array.from(video.textTracks || []).forEach((textTrack, index) => {
+      const label = textTrack?.label || `Subtitle ${index + 1}`;
+      const language = textTrack?.language || '';
+      const key = `${label}:${language}`;
+      if (seen.has(key)) return;
+      const inlineVtt = serializeTrackToVtt(textTrack);
+      if (!inlineVtt) return;
+      seen.add(key);
+      subtitles.push({
+        url: '',
+        inlineVtt,
+        label,
+        language,
+        kind: textTrack?.kind || 'subtitles',
+        selected: textTrack?.mode === 'showing',
+        format: 'vtt'
+      });
+    });
+
+    return subtitles;
   }
   
 })();

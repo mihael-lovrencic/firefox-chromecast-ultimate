@@ -9,6 +9,7 @@ const PORT = 4269;
 const DISCOVERY_TIMEOUT_MS = 2000;
 const sessions = new Map();
 const proxyHeadersByToken = new Map();
+const inlineSubtitlesById = new Map();
 const LOCAL_IP = getLocalIp() || '127.0.0.1';
 
 function json(res, status, payload) {
@@ -105,9 +106,81 @@ function buildProxyUrl(url, token) {
   return `http://${LOCAL_IP}:${PORT}/proxy?${params.toString()}`;
 }
 
+function buildSubtitleUrl(track, token) {
+  if (track.inlineId) {
+    const params = new URLSearchParams({ id: track.inlineId });
+    return `http://${LOCAL_IP}:${PORT}/subtitle?${params.toString()}`;
+  }
+  const params = new URLSearchParams({ url: track.url });
+  if (token) params.set('token', token);
+  if (track.format) params.set('format', track.format);
+  return `http://${LOCAL_IP}:${PORT}/subtitle?${params.toString()}`;
+}
+
 function isM3U8(url, contentType) {
   if (contentType && contentType.toLowerCase().includes('mpegurl')) return true;
   return url.toLowerCase().includes('.m3u8');
+}
+
+function detectSubtitleFormat(url = '', contentType = '') {
+  const lowerUrl = url.toLowerCase();
+  const lowerType = contentType.toLowerCase();
+  if (lowerUrl.endsWith('.srt') || lowerType.includes('subrip') || lowerType.includes('x-subrip')) {
+    return 'srt';
+  }
+  if (lowerUrl.endsWith('.ttml') || lowerUrl.endsWith('.dfxp') || lowerType.includes('ttml')) {
+    return 'ttml';
+  }
+  return 'vtt';
+}
+
+function subtitleContentType(format) {
+  if (format === 'ttml') return 'application/ttml+xml';
+  return 'text/vtt';
+}
+
+function srtToVtt(text) {
+  const normalized = String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/^\uFEFF/, '')
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+  return normalized.startsWith('WEBVTT') ? normalized : `WEBVTT\n\n${normalized}`;
+}
+
+function registerInlineSubtitle(content, contentType = 'text/vtt') {
+  const id = Math.random().toString(36).slice(2);
+  inlineSubtitlesById.set(id, { content, contentType });
+  setTimeout(() => inlineSubtitlesById.delete(id), 30 * 60 * 1000);
+  return id;
+}
+
+function normalizeSubtitleTracks(tracks = [], token) {
+  const normalized = [];
+  for (const rawTrack of tracks) {
+    if (!rawTrack || typeof rawTrack !== 'object') continue;
+    const label = rawTrack.label || rawTrack.language || `Subtitle ${normalized.length + 1}`;
+    const language = rawTrack.language || 'en';
+    const kind = rawTrack.kind === 'captions' ? 'CAPTIONS' : 'SUBTITLES';
+    const format = detectSubtitleFormat(rawTrack.url || '', rawTrack.contentType || rawTrack.format || '');
+    let inlineId = '';
+    if (rawTrack.inlineVtt) {
+      inlineId = registerInlineSubtitle(rawTrack.inlineVtt, 'text/vtt');
+    } else if (!rawTrack.url) {
+      continue;
+    }
+    normalized.push({
+      trackId: normalized.length + 1,
+      type: 'TEXT',
+      trackContentId: buildSubtitleUrl({ url: rawTrack.url, format, inlineId }, token),
+      trackContentType: subtitleContentType(format),
+      name: label,
+      language,
+      subtype: kind,
+      selected: !!rawTrack.selected
+    });
+  }
+  return normalized;
 }
 
 function sanitizeHeaderName(name) {
@@ -235,6 +308,57 @@ async function handleProxy(req, res) {
   }
 }
 
+async function handleSubtitle(req, res) {
+  try {
+    const reqUrl = new URL(req.url, `http://${req.headers.host}`);
+    const inlineId = reqUrl.searchParams.get('id');
+    if (inlineId) {
+      const inlineSubtitle = inlineSubtitlesById.get(inlineId);
+      if (!inlineSubtitle) return json(res, 404, { error: 'Subtitle not found' });
+      res.writeHead(200, {
+        'Content-Type': inlineSubtitle.contentType || 'text/vtt',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'no-store'
+      });
+      res.end(inlineSubtitle.content);
+      return;
+    }
+
+    const target = reqUrl.searchParams.get('url');
+    const token = reqUrl.searchParams.get('token') || '';
+    if (!target) return json(res, 400, { error: 'Missing url' });
+    const targetUrl = new URL(target);
+    if (!['http:', 'https:'].includes(targetUrl.protocol)) {
+      return json(res, 400, { error: 'Invalid protocol' });
+    }
+
+    let upstream;
+    try {
+      const headerMap = proxyHeadersByToken.get(token) || new Map();
+      upstream = await proxyFetch(targetUrl.toString(), headerMap);
+    } catch (err) {
+      return json(res, 502, { error: `Subtitle fetch failed: ${err.message}` });
+    }
+
+    const contentType = upstream.headers.get('content-type') || '';
+    const requestedFormat = reqUrl.searchParams.get('format') || '';
+    const format = requestedFormat || detectSubtitleFormat(targetUrl.toString(), contentType);
+    let body = await upstream.text();
+    if (format === 'srt') {
+      body = srtToVtt(body);
+    }
+
+    res.writeHead(200, {
+      'Content-Type': subtitleContentType(format),
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'no-store'
+    });
+    res.end(body);
+  } catch (e) {
+    return json(res, 500, { error: e.message });
+  }
+}
+
 function isYouTubeUrl(url) {
   return /(^https?:\/\/)?(www\.)?(m\.)?(music\.)?(youtube\.com|youtu\.be)\//i.test(url);
 }
@@ -352,6 +476,13 @@ function castToDevice(device, url, options = {}) {
       } else {
         const castUrl = options.useProxy ? buildProxyUrl(url, options.token) : url;
         const contentType = detectContentType(url);
+        const subtitleTracks = normalizeSubtitleTracks(options.subtitles || [], options.token);
+        const activeTrackIds = subtitleTracks
+          .filter(track => track.selected)
+          .map(track => track.trackId);
+        if (activeTrackIds.length === 0 && subtitleTracks.length > 0) {
+          activeTrackIds.push(subtitleTracks[0].trackId);
+        }
         console.log('[Cast] Using URL:', castUrl);
         client.launch(DefaultMediaReceiver, (err, player) => {
           if (err) return cleanup(err);
@@ -360,7 +491,21 @@ function castToDevice(device, url, options = {}) {
             contentType,
             streamType: 'BUFFERED'
           };
-          player.load(media, { autoplay: true }, loadErr => {
+          if (subtitleTracks.length > 0) {
+            media.tracks = subtitleTracks.map(({ selected, ...track }) => track);
+            media.textTrackStyle = {
+              backgroundColor: '#00000000',
+              foregroundColor: '#FFFFFFFF',
+              edgeType: 'OUTLINE',
+              edgeColor: '#000000FF',
+              fontScale: 1.0
+            };
+          }
+          const loadOptions = { autoplay: true };
+          if (activeTrackIds.length > 0) {
+            loadOptions.activeTrackIds = activeTrackIds;
+          }
+          player.load(media, loadOptions, loadErr => {
             if (loadErr) return cleanup(loadErr);
             sessions.set(device.address, { client, player, type: 'media' });
             resolve();
@@ -423,6 +568,10 @@ const server = http.createServer(async (req, res) => {
     return handleProxy(req, res);
   }
 
+  if (req.method === 'GET' && req.url.startsWith('/subtitle')) {
+    return handleSubtitle(req, res);
+  }
+
   if (req.method === 'POST' && req.url === '/cast') {
     try {
       const body = await readBody(req);
@@ -431,6 +580,7 @@ const server = http.createServer(async (req, res) => {
       const referer = body.referer || '';
       const cookie = body.cookie || '';
       const origin = body.origin || '';
+      const subtitles = Array.isArray(body.subtitles) ? body.subtitles : [];
       const headerMap = toHeaderMap(body.headers || []);
       const baseHeaders = new Map();
       if (referer) baseHeaders.set('referer', referer);
@@ -455,7 +605,7 @@ const server = http.createServer(async (req, res) => {
       if (!device) return json(res, 404, { error: 'No devices found' });
       if (!device.port) device.port = 8009;
       if (!device.address && device.host) device.address = device.host;
-      await castToDevice(device, url, { useProxy, referer, cookie, origin, token });
+      await castToDevice(device, url, { useProxy, referer, cookie, origin, token, subtitles });
       return json(res, 200, { success: true });
     } catch (e) {
       console.error('[Cast] Failed:', e?.message || e);

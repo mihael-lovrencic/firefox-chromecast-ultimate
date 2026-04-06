@@ -218,7 +218,8 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
           referer: message.referer || '',
           cookie,
           origin,
-          headers: Array.isArray(message.headers) ? message.headers : []
+          headers: Array.isArray(message.headers) ? message.headers : [],
+          subtitles: Array.isArray(message.subtitles) ? message.subtitles : []
         };
         await helperRequest('/cast', {
           method: 'POST',

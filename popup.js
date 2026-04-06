@@ -128,6 +128,99 @@ async function getActiveTab() {
   return tab;
 }
 
+function getVideoContextsScript() {
+  return () => {
+    function inferSubtitleFormat(url) {
+      const lower = String(url || '').toLowerCase();
+      if (lower.endsWith('.srt')) return 'srt';
+      if (lower.endsWith('.ttml') || lower.endsWith('.dfxp')) return 'ttml';
+      return 'vtt';
+    }
+
+    function formatCueTime(seconds) {
+      const totalMs = Math.max(0, Math.round(Number(seconds || 0) * 1000));
+      const hours = Math.floor(totalMs / 3600000);
+      const minutes = Math.floor((totalMs % 3600000) / 60000);
+      const secs = Math.floor((totalMs % 60000) / 1000);
+      const ms = totalMs % 1000;
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+    }
+
+    function serializeTrackToVtt(textTrack) {
+      try {
+        const cues = Array.from(textTrack?.cues || []);
+        if (cues.length === 0) return '';
+        let vtt = 'WEBVTT\n\n';
+        cues.forEach((cue, index) => {
+          const text = String(cue.text || '').trim();
+          if (!text) return;
+          vtt += `${cue.id || index + 1}\n`;
+          vtt += `${formatCueTime(cue.startTime)} --> ${formatCueTime(cue.endTime)}\n`;
+          vtt += `${text}\n\n`;
+        });
+        return vtt;
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function collectSubtitles(video) {
+      const subtitles = [];
+      const seen = new Set();
+
+      Array.from(video.querySelectorAll('track')).forEach((trackEl, index) => {
+        const kind = (trackEl.kind || '').toLowerCase();
+        if (kind !== 'subtitles' && kind !== 'captions') return;
+        const src = trackEl.src || trackEl.getAttribute('src') || '';
+        const absoluteUrl = src ? new URL(src, document.baseURI).toString() : '';
+        const textTrack = trackEl.track;
+        const inlineVtt = !absoluteUrl ? serializeTrackToVtt(textTrack) : '';
+        if (!absoluteUrl && !inlineVtt) return;
+        const key = absoluteUrl || `${trackEl.label || textTrack?.label || ''}:${trackEl.srclang || textTrack?.language || ''}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        subtitles.push({
+          url: absoluteUrl,
+          inlineVtt,
+          label: trackEl.label || textTrack?.label || `Subtitle ${index + 1}`,
+          language: trackEl.srclang || textTrack?.language || '',
+          kind,
+          selected: !!trackEl.default || textTrack?.mode === 'showing',
+          format: absoluteUrl ? inferSubtitleFormat(absoluteUrl) : 'vtt'
+        });
+      });
+
+      Array.from(video.textTracks || []).forEach((textTrack, index) => {
+        const label = textTrack?.label || `Subtitle ${index + 1}`;
+        const language = textTrack?.language || '';
+        const key = `${label}:${language}`;
+        if (seen.has(key)) return;
+        const inlineVtt = serializeTrackToVtt(textTrack);
+        if (!inlineVtt) return;
+        seen.add(key);
+        subtitles.push({
+          url: '',
+          inlineVtt,
+          label,
+          language,
+          kind: textTrack?.kind || 'subtitles',
+          selected: textTrack?.mode === 'showing',
+          format: 'vtt'
+        });
+      });
+
+      return subtitles;
+    }
+
+    return Array.from(document.querySelectorAll('video')).map(v => ({
+      src: v.currentSrc || v.src,
+      width: v.offsetWidth,
+      height: v.offsetHeight,
+      subtitles: collectSubtitles(v)
+    })).filter(v => v.src || (Array.isArray(v.subtitles) && v.subtitles.length > 0));
+  };
+}
+
 function formatHeaderSummary(headers = []) {
   if (!Array.isArray(headers) || headers.length === 0) {
     return 'No captured request headers yet';
@@ -208,7 +301,7 @@ async function resolveVideoUrl(initialUrl, tabUrl) {
   return { finalUrl, headers };
 }
 
-async function castVideo(videoUrl) {
+async function castVideo(videoUrl, subtitles = []) {
   if (!selectedDevice && currentMode === 'standalone') {
     setStatus('Please select a Chromecast first');
     return;
@@ -229,7 +322,8 @@ async function castVideo(videoUrl) {
         device: selectedDevice,
         useProxy: shouldProxy(finalUrl, headers),
         referer: tabUrl,
-        headers
+        headers,
+        subtitles
       });
       if (response && response.error) {
         throw new Error(response.error);
@@ -265,11 +359,7 @@ async function scanVideos() {
     const tab = await getActiveTab();
     const results = await browser.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => Array.from(document.querySelectorAll('video')).map(v => ({
-        src: v.currentSrc || v.src,
-        width: v.offsetWidth,
-        height: v.offsetHeight
-      })).filter(v => v.src)
+      func: getVideoContextsScript()
     });
 
     const videos = results[0]?.result || [];
@@ -292,10 +382,11 @@ async function scanVideos() {
       nameSpan.textContent = `Video ${index + 1}`;
       const ipSpan = document.createElement('span');
       ipSpan.className = 'device-ip';
-      ipSpan.textContent = `${video.width}x${video.height}`;
+      const subtitleCount = Array.isArray(video.subtitles) ? video.subtitles.length : 0;
+      ipSpan.textContent = `${video.width}x${video.height}${subtitleCount ? ` • ${subtitleCount} subtitle${subtitleCount === 1 ? '' : 's'}` : ''}`;
       btn.appendChild(nameSpan);
       btn.appendChild(ipSpan);
-      btn.onclick = () => castVideo(video.src);
+      btn.onclick = () => castVideo(video.src, video.subtitles || []);
       videosList.appendChild(btn);
     });
   } catch (error) {
@@ -342,8 +433,15 @@ document.getElementById('pauseBtn').onclick = () => sendControl('pause');
 document.getElementById('stopBtn').onclick = () => sendControl('stop');
 document.getElementById('castCurrentBtn').onclick = async () => {
   const tab = await getActiveTab();
-  if (tab.url) {
-    castVideo(tab.url);
+  const results = await browser.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: getVideoContextsScript()
+  });
+  const videos = results[0]?.result || [];
+  if (videos.length > 0) {
+    castVideo(videos[0].src || tab.url, videos[0].subtitles || []);
+  } else if (tab.url) {
+    castVideo(tab.url, []);
   }
 };
 document.getElementById('refreshDebugBtn').onclick = refreshDebugPanel;
