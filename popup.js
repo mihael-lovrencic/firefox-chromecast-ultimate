@@ -11,6 +11,10 @@ const debugTabUrlEl = document.getElementById('debugTabUrl');
 const debugMediaUrlEl = document.getElementById('debugMediaUrl');
 const debugProxyEl = document.getElementById('debugProxy');
 const debugHeadersEl = document.getElementById('debugHeaders');
+const subtitleSelectEl = document.getElementById('subtitleSelect');
+const subtitleHintEl = document.getElementById('subtitleHint');
+let currentVideoContexts = [];
+let currentVideoIndex = 0;
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -126,6 +130,88 @@ function selectDevice(device) {
 async function getActiveTab() {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   return tab;
+}
+
+function getActiveVideoContext() {
+  if (!Array.isArray(currentVideoContexts) || currentVideoContexts.length === 0) {
+    return null;
+  }
+  return currentVideoContexts[currentVideoIndex] || currentVideoContexts[0] || null;
+}
+
+function applySubtitleChoice(subtitles = []) {
+  const tracks = Array.isArray(subtitles) ? subtitles : [];
+  const choice = subtitleSelectEl ? subtitleSelectEl.value : 'auto';
+  if (tracks.length === 0) {
+    return [];
+  }
+  if (choice === 'off') {
+    return tracks.map(track => ({ ...track, selected: false }));
+  }
+  if (choice.startsWith('track:')) {
+    const selectedIndex = Number.parseInt(choice.slice(6), 10);
+    if (Number.isInteger(selectedIndex) && selectedIndex >= 0) {
+      return tracks.map((track, index) => ({ ...track, selected: index === selectedIndex }));
+    }
+  }
+  return tracks.map((track, index) => ({
+    ...track,
+    selected: track.selected || (!tracks.some(item => item.selected) && index === 0)
+  }));
+}
+
+function renderSubtitlePicker(subtitles = []) {
+  if (!subtitleSelectEl || !subtitleHintEl) return;
+  const previousValue = subtitleSelectEl.value || 'auto';
+  subtitleSelectEl.innerHTML = '';
+
+  const autoOption = document.createElement('option');
+  autoOption.value = 'auto';
+  autoOption.textContent = 'Auto';
+  subtitleSelectEl.appendChild(autoOption);
+
+  const offOption = document.createElement('option');
+  offOption.value = 'off';
+  offOption.textContent = 'Off';
+  subtitleSelectEl.appendChild(offOption);
+
+  if (!Array.isArray(subtitles) || subtitles.length === 0) {
+    subtitleSelectEl.disabled = true;
+    subtitleHintEl.textContent = 'No subtitles detected for the current video.';
+    subtitleSelectEl.value = 'auto';
+    return;
+  }
+
+  subtitles.forEach((track, index) => {
+    const option = document.createElement('option');
+    option.value = `track:${index}`;
+    const label = track.label || track.language || `Subtitle ${index + 1}`;
+    const language = track.language ? ` (${track.language})` : '';
+    option.textContent = `${label}${language}`;
+    subtitleSelectEl.appendChild(option);
+  });
+
+  subtitleSelectEl.disabled = false;
+  subtitleHintEl.textContent = `${subtitles.length} subtitle track${subtitles.length === 1 ? '' : 's'} available for the current video.`;
+
+  const validValues = new Set(Array.from(subtitleSelectEl.options).map(option => option.value));
+  if (validValues.has(previousValue)) {
+    subtitleSelectEl.value = previousValue;
+  } else if (subtitles.some(track => track.selected)) {
+    subtitleSelectEl.value = `track:${subtitles.findIndex(track => track.selected)}`;
+  } else {
+    subtitleSelectEl.value = 'auto';
+  }
+}
+
+function setActiveVideoIndex(index) {
+  if (!Array.isArray(currentVideoContexts) || currentVideoContexts.length === 0) {
+    currentVideoIndex = 0;
+    renderSubtitlePicker([]);
+    return;
+  }
+  currentVideoIndex = Math.max(0, Math.min(index, currentVideoContexts.length - 1));
+  renderSubtitlePicker(currentVideoContexts[currentVideoIndex]?.subtitles || []);
 }
 
 function getVideoContextsScript() {
@@ -264,6 +350,25 @@ async function refreshDebugPanel() {
   }
 }
 
+async function loadVideoContexts() {
+  const tab = await getActiveTab();
+  if (!tab?.id) {
+    currentVideoContexts = [];
+    setActiveVideoIndex(0);
+    return [];
+  }
+  const results = await browser.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: getVideoContextsScript()
+  });
+  currentVideoContexts = results[0]?.result || [];
+  if (currentVideoIndex >= currentVideoContexts.length) {
+    currentVideoIndex = 0;
+  }
+  setActiveVideoIndex(currentVideoIndex);
+  return currentVideoContexts;
+}
+
 async function resolveVideoUrl(initialUrl, tabUrl) {
   let finalUrl = initialUrl;
   let headers = [];
@@ -316,6 +421,7 @@ async function castVideo(videoUrl, subtitles = []) {
     if (currentMode === 'standalone') {
       await ensureHelperReady();
       const { finalUrl, headers } = await resolveVideoUrl(videoUrl, tabUrl);
+      const chosenSubtitles = applySubtitleChoice(subtitles);
       const response = await browser.runtime.sendMessage({
         type: 'castVideo',
         videoUrl: finalUrl,
@@ -323,7 +429,7 @@ async function castVideo(videoUrl, subtitles = []) {
         useProxy: shouldProxy(finalUrl, headers),
         referer: tabUrl,
         headers,
-        subtitles
+        subtitles: chosenSubtitles
       });
       if (response && response.error) {
         throw new Error(response.error);
@@ -356,13 +462,7 @@ async function castVideo(videoUrl, subtitles = []) {
 
 async function scanVideos() {
   try {
-    const tab = await getActiveTab();
-    const results = await browser.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: getVideoContextsScript()
-    });
-
-    const videos = results[0]?.result || [];
+    const videos = await loadVideoContexts();
     videosList.innerHTML = '';
 
     if (videos.length === 0) {
@@ -386,7 +486,12 @@ async function scanVideos() {
       ipSpan.textContent = `${video.width}x${video.height}${subtitleCount ? ` • ${subtitleCount} subtitle${subtitleCount === 1 ? '' : 's'}` : ''}`;
       btn.appendChild(nameSpan);
       btn.appendChild(ipSpan);
-      btn.onclick = () => castVideo(video.src, video.subtitles || []);
+      btn.onmouseenter = () => setActiveVideoIndex(index);
+      btn.onfocus = () => setActiveVideoIndex(index);
+      btn.onclick = () => {
+        setActiveVideoIndex(index);
+        castVideo(video.src, video.subtitles || []);
+      };
       videosList.appendChild(btn);
     });
   } catch (error) {
@@ -406,6 +511,7 @@ function setMode(mode) {
   if (mode === 'standalone') {
     setStatus('Standalone mode - helper powered casting');
     scanForChromecasts();
+    loadVideoContexts().catch(() => renderSubtitlePicker([]));
   } else {
     setStatus('Android mode - connect to server');
   }
@@ -433,18 +539,21 @@ document.getElementById('pauseBtn').onclick = () => sendControl('pause');
 document.getElementById('stopBtn').onclick = () => sendControl('stop');
 document.getElementById('castCurrentBtn').onclick = async () => {
   const tab = await getActiveTab();
-  const results = await browser.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: getVideoContextsScript()
-  });
-  const videos = results[0]?.result || [];
-  if (videos.length > 0) {
-    castVideo(videos[0].src || tab.url, videos[0].subtitles || []);
+  const videos = await loadVideoContexts();
+  const activeVideo = getActiveVideoContext();
+  if (activeVideo) {
+    castVideo(activeVideo.src || tab.url, activeVideo.subtitles || []);
   } else if (tab.url) {
     castVideo(tab.url, []);
   }
 };
 document.getElementById('refreshDebugBtn').onclick = refreshDebugPanel;
+if (subtitleSelectEl) {
+  subtitleSelectEl.onchange = () => {
+    const activeVideo = getActiveVideoContext();
+    renderSubtitlePicker(activeVideo?.subtitles || []);
+  };
+}
 
 document.getElementById('connectBtn').onclick = () => {
   serverUrl = serverUrlInput.value;
@@ -457,4 +566,5 @@ if (serverUrlInput) {
 }
 
 setMode(currentMode);
+loadVideoContexts().catch(() => renderSubtitlePicker([]));
 refreshDebugPanel();

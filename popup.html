@@ -38,6 +38,10 @@
     .debug-label { display: block; font-size: 10px; letter-spacing: 0.08em; color: #7ea4dc; text-transform: uppercase; margin-bottom: 4px; }
     .debug-value { font-size: 12px; color: #f4f7fb; word-break: break-word; }
     .debug-value.mono { font-family: Consolas, Monaco, monospace; font-size: 11px; }
+    .subtitle-picker { margin-top: 10px; padding: 10px; background: #16213e; border-radius: 10px; }
+    .subtitle-picker label { display: block; font-size: 12px; color: #9ab7e0; margin-bottom: 6px; }
+    .subtitle-picker select { width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid #2c3d5f; background: #0f1728; color: white; }
+    .subtitle-picker small { display: block; margin-top: 6px; color: #7f8aa3; font-size: 11px; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
@@ -76,6 +80,15 @@
   <button id="castCurrentBtn" style="width: 100%; background: linear-gradient(135deg, #fbbc04, #ff6d00); margin-top: 10px;">
     Cast Current Page
   </button>
+
+  <div class="subtitle-picker">
+    <label for="subtitleSelect">Subtitle Track</label>
+    <select id="subtitleSelect">
+      <option value="auto">Auto</option>
+      <option value="off">Off</option>
+    </select>
+    <small id="subtitleHint">No subtitles detected yet.</small>
+  </div>
 
   <div class="debug-panel">
     <div class="debug-head">
