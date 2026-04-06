@@ -7,6 +7,36 @@
   let updateTimer = null;
   const capturedUrls = [];
 
+  function createCastGlyph() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    [
+      'M4 18a2 2 0 0 1 2 2',
+      'M4 14a6 6 0 0 1 6 6',
+      'M4 10a10 10 0 0 1 10 10',
+      'M4 6h16v9'
+    ].forEach(d => {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
+  function setButtonVisual(btn, state, label) {
+    btn.classList.remove('casting', 'success', 'warning', 'error');
+    btn.dataset.stateLabel = label || '';
+    if (state && state !== 'idle') {
+      btn.classList.add(state);
+    }
+  }
+
+  function resetButton(btn, label = 'Cast') {
+    btn.replaceChildren(createCastGlyph());
+    setButtonVisual(btn, 'idle', label);
+  }
+
   function installUrlSniffer() {
     if (window.__chromecastSnifferInstalled) return;
     window.__chromecastSnifferInstalled = true;
@@ -62,17 +92,17 @@
     
     const btn = document.createElement('button');
     btn.className = 'chromecast-btn';
-    btn.textContent = 'CAST';
     btn.title = 'Cast to Chromecast';
     btn.style.position = 'fixed';
     btn.style.pointerEvents = 'auto';
     btn.style.bottom = 'auto';
     btn.style.right = 'auto';
+    resetButton(btn, 'Cast');
     
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       console.log('[Chromecast] Cast button clicked!');
-      btn.textContent = '...';
+      setButtonVisual(btn, 'idle', 'Scanning');
       let videoUrl = video.currentSrc || video.src;
       if (videoUrl && videoUrl.startsWith('blob:')) {
         const candidate = findCandidateUrl();
@@ -82,15 +112,13 @@
         videoUrl = window.location.href;
       }
       if (!/youtube\.com|youtu\.be/i.test(videoUrl) && !videoUrl.includes('.m3u8') && !videoUrl.includes('.mp4')) {
-        btn.textContent = 'PLAY';
-        btn.style.background = '#fbbc04';
-        setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 2000);
+        setButtonVisual(btn, 'warning', 'Play video first');
+        setTimeout(() => resetButton(btn, 'Cast'), 2000);
         return;
       }
       if (!videoUrl) {
-        btn.textContent = 'NO URL';
-        btn.style.background = '#f00';
-        setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 2000);
+        setButtonVisual(btn, 'error', 'No media URL');
+        setTimeout(() => resetButton(btn, 'Cast'), 2000);
         return;
       }
       browser.runtime.sendMessage({ type: 'getLastMediaRequest' }).then(lastReq => {
@@ -101,9 +129,8 @@
         return browser.runtime.sendMessage({ type: 'discoverDevices' }).then(devices => ({ devices, headers, useProxy }));
       }).then(({ devices, headers, useProxy }) => {
         if (!devices || devices.length === 0) {
-          btn.textContent = 'NO';
-          btn.style.background = '#f00';
-          setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 2000);
+          setButtonVisual(btn, 'error', 'No devices');
+          setTimeout(() => resetButton(btn, 'Cast'), 2000);
         } else {
           let device = devices[0];
           if (devices.length > 1) {
@@ -111,13 +138,13 @@
             const choice = prompt(`Select Chromecast:\n${list}`, '1');
             const index = parseInt(choice || '1', 10) - 1;
             if (Number.isNaN(index) || index < 0 || index >= devices.length) {
-              btn.textContent = 'CANCEL';
-              btn.style.background = '#f00';
-              setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 2000);
+              setButtonVisual(btn, 'warning', 'Cancelled');
+              setTimeout(() => resetButton(btn, 'Cast'), 1800);
               return;
             }
             device = devices[index];
           }
+          setButtonVisual(btn, 'casting', `Casting to ${device.name || device.address}`);
           browser.runtime.sendMessage({
             type: 'castVideo',
             videoUrl,
@@ -127,20 +154,18 @@
             headers
           }).then(res => {
             if (res && res.error) throw new Error(res.error);
-            btn.textContent = 'CASTING';
-            btn.style.background = '#34a853';
-            setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 3000);
+            setButtonVisual(btn, 'success', `Connected to ${device.name || device.address}`);
+            setTimeout(() => resetButton(btn, 'Cast'), 3000);
           }).catch(err => {
             console.error('[Chromecast] Cast error:', err);
-            btn.textContent = 'ERR';
-            btn.style.background = '#f00';
-            setTimeout(() => { btn.textContent = 'CAST'; btn.style.background = ''; }, 3000);
+            setButtonVisual(btn, 'error', err.message || 'Cast failed');
+            setTimeout(() => resetButton(btn, 'Cast'), 3000);
           });
         }
       }).catch(e => {
         console.error('[Chromecast] Error:', e);
-        btn.textContent = 'ERR';
-        btn.style.background = '#f00';
+        setButtonVisual(btn, 'error', e.message || 'Cast failed');
+        setTimeout(() => resetButton(btn, 'Cast'), 3000);
       });
     });
     

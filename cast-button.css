@@ -1,25 +1,26 @@
 .chromecast-btn {
   position: absolute;
-  bottom: 70px;
-  right: 10px;
-  width: 40px;
-  height: 40px;
-  background: #4285f4;
+  width: 46px;
+  height: 46px;
+  background: rgba(16, 20, 32, 0.82);
   border: none;
-  border-radius: 50%;
+  border-radius: 14px;
   cursor: pointer;
-  opacity: 0.9;
-  transition: opacity 0.3s, transform 0.2s;
+  opacity: 0.96;
+  transition: opacity 0.25s, transform 0.2s, background 0.2s, box-shadow 0.2s;
   z-index: 2147483647;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .chromecast-btn:hover {
-  transform: scale(1.1);
-  background: #3367d6;
+  transform: translateY(-1px) scale(1.04);
+  background: rgba(32, 39, 60, 0.92);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.42);
 }
 
 .chromecast-btn.visible {
@@ -27,19 +28,62 @@
 }
 
 .chromecast-btn.casting {
-  background: #34a853;
+  background: rgba(28, 88, 56, 0.92);
   animation: pulse 2s infinite;
+}
+
+.chromecast-btn.success {
+  background: rgba(25, 96, 58, 0.92);
+}
+
+.chromecast-btn.warning {
+  background: rgba(124, 84, 14, 0.92);
+}
+
+.chromecast-btn.error {
+  background: rgba(124, 30, 30, 0.92);
 }
 
 .chromecast-btn svg {
   width: 24px;
   height: 24px;
-  fill: white;
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 @keyframes pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.1); }
+}
+
+.chromecast-btn::after {
+  content: attr(data-state-label);
+  position: absolute;
+  right: 56px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(7, 10, 18, 0.78);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 0.18s ease;
+}
+
+.chromecast-btn[data-state-label]:hover::after,
+.chromecast-btn.casting::after,
+.chromecast-btn.error::after,
+.chromecast-btn.warning::after,
+.chromecast-btn.success::after {
+  opacity: 1;
 }
 
 .chromecast-tooltip {
