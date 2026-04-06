@@ -33,6 +33,23 @@
           try { report(url); } catch (_) {}
           return origOpen.call(this, method, url, ...rest);
         };
+        const NativeWebSocket = window.WebSocket;
+        window.WebSocket = function(url, protocols) {
+          const ws = protocols ? new NativeWebSocket(url, protocols) : new NativeWebSocket(url);
+          ws.addEventListener('message', (event) => {
+            try {
+              if (typeof event.data === 'string') {
+                report(event.data);
+                if (event.data.includes('.m3u8') || event.data.includes('.mp4')) return;
+                const parsed = JSON.parse(event.data);
+                const values = JSON.stringify(parsed);
+                report(values);
+              }
+            } catch (_) {}
+          });
+          return ws;
+        };
+        window.WebSocket.prototype = NativeWebSocket.prototype;
       })();
     `;
     document.documentElement.appendChild(script);
@@ -201,6 +218,8 @@
   function extractMediaUrl(raw) {
     try {
       if (!raw || typeof raw !== 'string') return null;
+      const direct = raw.match(/https?:\/\/[^"'\\s]+?\.(m3u8|mp4)([^"'\\s]*)/i);
+      if (direct && direct[0]) return direct[0];
       if (raw.includes('.m3u8') || raw.includes('.mp4')) {
         const url = tryExtractFromQuery(raw);
         return url || raw;
