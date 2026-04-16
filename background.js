@@ -63,8 +63,8 @@ async function helperRequest(path, options = {}) {
 
   const urlsToTry = HELPER_URLS.slice();
   
-  if (options.helperUrl) {
-    urlsToTry.unshift(options.helperUrl);
+  if (options.url) {
+    urlsToTry.unshift(options.url);
   }
   
   let lastError;
@@ -96,6 +96,43 @@ async function isHelperReachable(helperUrl = null) {
     } catch (_) {}
   }
   return false;
+}
+
+async function testServer(url, mode = 'helper') {
+  try {
+    const res = await fetch(`${url}/status`);
+    if (res.ok) {
+      return { ok: true };
+    }
+    return { ok: false, error: `HTTP ${res.status}` };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+async function androidRequest(path, options = {}) {
+  const url = options.url;
+  if (!url) throw new Error('No Android URL provided');
+  
+  try {
+    const res = await fetch(`${url}${path}`, {
+      method: options.method || 'GET',
+      headers: options.headers || { 'Content-Type': 'application/json' },
+      body: options.body
+    });
+    
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try {
+        const data = await res.json();
+        if (data && data.error) message = data.error;
+      } catch (_) {}
+      throw new Error(message);
+    }
+    return res.json();
+  } catch (e) {
+    throw new Error(e.message);
+  }
 }
 
 async function waitForHelperReady() {
@@ -198,20 +235,11 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === 'testHelper') {
+  if (message.type === 'testServer') {
     (async () => {
       try {
-        const url = message.helperUrl;
-        if (!url) {
-          sendResponse({ ok: false, error: 'No URL provided' });
-          return;
-        }
-        const res = await fetch(`${url}/status`);
-        if (res.ok) {
-          sendResponse({ ok: true });
-        } else {
-          sendResponse({ ok: false, error: 'HTTP ' + res.status });
-        }
+        const result = await testServer(message.url, message.mode);
+        sendResponse(result);
       } catch (e) {
         sendResponse({ ok: false, error: e.message });
       }
@@ -220,42 +248,71 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'discoverDevices') {
-    ensureHelperRunning()
-      .then(() => helperRequest('/devices', { helperUrl: message.helperUrl }))
-      .then(devices => sendResponse(devices))
-      .catch(e => sendResponse({ error: e.message }));
+    (async () => {
+      try {
+        let devices;
+        if (message.mode === 'android' && message.androidUrl) {
+          devices = await androidRequest('/devices', { url: message.androidUrl });
+        } else if (message.helperUrl) {
+          await ensureHelperRunning();
+          devices = await helperRequest('/devices', { url: message.helperUrl });
+        } else {
+          await ensureHelperRunning();
+          devices = await helperRequest('/devices');
+        }
+        sendResponse(Array.isArray(devices) ? devices : []);
+      } catch (e) {
+        sendResponse({ error: e.message });
+      }
+    })();
     return true;
   }
 
   if (message.type === 'castVideo') {
     (async () => {
       try {
-        await ensureHelperRunning();
         const device = message.device || lastDevice;
-        const cookieForReferer = await getCookieHeader(message.referer || '');
-        const cookieForMedia = await getCookieHeader(message.videoUrl || '');
-        const cookie = mergeCookieHeaders(cookieForReferer, cookieForMedia);
-        let origin = '';
-        try {
-          origin = message.referer ? new URL(message.referer).origin : '';
-        } catch (_) {}
-        const payload = {
-          url: message.videoUrl,
-          device,
-          useProxy: !!message.useProxy,
-          streamType: message.streamType || '',
-          contentType: message.contentType || '',
-          referer: message.referer || '',
-          cookie,
-          origin,
-          headers: Array.isArray(message.headers) ? message.headers : [],
-          subtitles: Array.isArray(message.subtitles) ? message.subtitles : []
-        };
-        await helperRequest('/cast', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-          helperUrl: message.helperUrl
-        });
+        
+        let result;
+        if (message.mode === 'android' && message.androidUrl) {
+          const payload = {
+            url: message.videoUrl,
+            device: device?.address || device?.name
+          };
+          result = await androidRequest('/cast', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            url: message.androidUrl
+          });
+        } else {
+          await ensureHelperRunning();
+          const cookieForReferer = await getCookieHeader(message.referer || '');
+          const cookieForMedia = await getCookieHeader(message.videoUrl || '');
+          const cookie = mergeCookieHeaders(cookieForReferer, cookieForMedia);
+          let origin = '';
+          try {
+            origin = message.referer ? new URL(message.referer).origin : '';
+          } catch (_) {}
+          const payload = {
+            url: message.videoUrl,
+            device,
+            useProxy: !!message.useProxy,
+            streamType: message.streamType || '',
+            contentType: message.contentType || '',
+            referer: message.referer || '',
+            cookie,
+            origin,
+            headers: Array.isArray(message.headers) ? message.headers : [],
+            subtitles: Array.isArray(message.subtitles) ? message.subtitles : []
+          };
+          const requestUrl = message.helperUrl || null;
+          result = await helperRequest('/cast', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            url: requestUrl
+          });
+        }
+        
         if (device) lastDevice = device;
         sendResponse({ success: true });
       } catch (e) {
@@ -269,16 +326,27 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'control') {
     (async () => {
       try {
-        await ensureHelperRunning();
-        const payload = {
-          action: message.action,
-          device: lastDevice
-        };
-        await helperRequest('/control', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-          helperUrl: message.helperUrl
-        });
+        let result;
+        if (message.mode === 'android' && message.androidUrl) {
+          const payload = { action: message.action };
+          result = await androidRequest('/control', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            url: message.androidUrl
+          });
+        } else {
+          await ensureHelperRunning();
+          const payload = {
+            action: message.action,
+            device: lastDevice
+          };
+          const requestUrl = message.helperUrl || null;
+          result = await helperRequest('/control', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            url: requestUrl
+          });
+        }
         sendResponse({ success: true });
       } catch (e) {
         sendResponse({ error: e.message });
@@ -290,15 +358,44 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'stopCast') {
     (async () => {
       try {
-        await ensureHelperRunning();
-        await helperRequest('/stop', {
-          method: 'POST',
-          body: JSON.stringify({ device: lastDevice }),
-          helperUrl: message.helperUrl
-        });
+        if (message.mode === 'android' && message.androidUrl) {
+          await androidRequest('/control', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'stop' }),
+            url: message.androidUrl
+          });
+        } else {
+          await ensureHelperRunning();
+          const requestUrl = message.helperUrl || null;
+          await helperRequest('/stop', {
+            method: 'POST',
+            body: JSON.stringify({ device: lastDevice }),
+            url: requestUrl
+          });
+        }
         sendResponse({ success: true });
       } catch (e) {
         sendResponse({ error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'getDeviceStatus') {
+    (async () => {
+      try {
+        let status;
+        if (message.mode === 'android' && message.androidUrl) {
+          const result = await androidRequest('/status', { url: message.androidUrl });
+          status = result;
+        } else {
+          await ensureHelperRunning();
+          const requestUrl = message.helperUrl || null;
+          status = await helperRequest('/status', { url: requestUrl });
+        }
+        sendResponse(status || { casting: false });
+      } catch (e) {
+        sendResponse({ error: e.message, casting: false });
       }
     })();
     return true;

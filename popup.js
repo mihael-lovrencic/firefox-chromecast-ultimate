@@ -1,12 +1,22 @@
+
 let currentMode = localStorage.getItem('castMode') || 'standalone';
 let selectedDevice = null;
 let helperUrl = localStorage.getItem('helperUrl') || '';
+let androidUrl = localStorage.getItem('androidUrl') || '';
+let androidConnected = localStorage.getItem('androidConnected') === 'true';
+let isScanning = false;
 
 const statusTextEl = document.getElementById('statusText');
 const statusDotEl = document.getElementById('statusDot');
 const devicesListEl = document.getElementById('devicesList');
 const loadingStateEl = document.getElementById('loadingState');
 const emptyStateEl = document.getElementById('emptyState');
+const androidConnectionStatusEl = document.getElementById('androidConnectionStatus');
+const androidErrorHintEl = document.getElementById('androidErrorHint');
+const androidLoadingEl = document.getElementById('androidLoading');
+const androidDevicesSectionEl = document.getElementById('androidDevicesSection');
+const androidDevicesListEl = document.getElementById('androidDevicesList');
+const androidRefreshBtnEl = document.getElementById('androidRefreshBtn');
 
 function setStatus(message, type = 'default') {
   if (statusTextEl) statusTextEl.textContent = message;
@@ -15,6 +25,24 @@ function setStatus(message, type = 'default') {
     if (type === 'searching') statusDotEl.classList.add('searching');
     if (type === 'error') statusDotEl.classList.add('error');
     if (type === 'success') statusDotEl.style.background = '#34a853';
+  }
+}
+
+function setAndroidConnectionState(state, message = '') {
+  if (!androidConnectionStatusEl) return;
+  
+  androidConnectionStatusEl.className = 'connection-status ' + state;
+  const span = androidConnectionStatusEl.querySelector('span');
+  if (span) {
+    span.textContent = message || (state === 'connected' ? 'Connected' : state === 'testing' ? 'Testing...' : 'Not connected');
+  }
+  
+  if (state === 'connected') {
+    localStorage.setItem('androidConnected', 'true');
+    androidConnected = true;
+  } else if (state === 'disconnected') {
+    localStorage.setItem('androidConnected', 'false');
+    androidConnected = false;
   }
 }
 
@@ -30,8 +58,12 @@ function clearDevices() {
   if (devicesListEl) devicesListEl.innerHTML = '';
 }
 
-function addDevice(device) {
-  if (!devicesListEl) return;
+function clearAndroidDevices() {
+  if (androidDevicesListEl) androidDevicesListEl.innerHTML = '';
+}
+
+function addDevice(device, targetListEl = devicesListEl) {
+  if (!targetListEl) return;
   
   const card = document.createElement('div');
   card.className = 'device-card';
@@ -71,36 +103,147 @@ function addDevice(device) {
   card.appendChild(checkDiv);
   
   card.onclick = () => selectDevice(device);
-  devicesListEl.appendChild(card);
+  targetListEl.appendChild(card);
 }
 
 async function scanForChromecasts() {
+  if (isScanning) return;
+  isScanning = true;
+  
   setStatus('Searching for devices...', 'searching');
   showLoading(true);
   showEmpty(false);
   clearDevices();
   
   try {
-    const devices = await browser.runtime.sendMessage({ type: 'discoverDevices', helperUrl });
+    const message = {
+      type: 'discoverDevices',
+      helperUrl: helperUrl,
+      androidUrl: androidUrl,
+      mode: currentMode
+    };
+    const devices = await browser.runtime.sendMessage(message);
     showLoading(false);
     
-    if (!devices || devices.length === 0) {
-      setStatus('No devices found', 'error');
+    if (!devices || devices.length === 0 || (devices.error && !devices[0])) {
+      const errorMsg = devices?.error || 'No devices found';
+      setStatus(errorMsg, 'error');
       showEmpty(true);
+      showErrorHint(errorMsg);
+      return;
+    }
+    
+    if (devices.error) {
+      setStatus(devices.error, 'error');
+      showEmpty(true);
+      showErrorHint(devices.error);
       return;
     }
     
     setStatus(`Found ${devices.length} device${devices.length > 1 ? 's' : ''}`, 'success');
+    hideErrorHint();
     
     devices.forEach(device => addDevice(device));
     
     if (devices.length === 1) {
       selectDevice(devices[0]);
     }
+    
+    updateCastingIndicator();
   } catch (error) {
     showLoading(false);
-    setStatus('Scan failed', 'error');
+    const errorMsg = 'Connection failed. Make sure the helper is running.';
+    setStatus(errorMsg, 'error');
     showEmpty(true);
+    showErrorHint(errorMsg);
+  } finally {
+    isScanning = false;
+  }
+}
+
+async function scanAndroidDevices() {
+  if (isScanning) return;
+  if (!androidConnected || !androidUrl) {
+    setStatus('Connect to app first', 'error');
+    return;
+  }
+  
+  isScanning = true;
+  setStatus('Scanning for devices...', 'searching');
+  androidLoadingEl.style.display = 'block';
+  clearAndroidDevices();
+  
+  if (androidRefreshBtnEl) {
+    androidRefreshBtnEl.classList.add('spinning');
+  }
+  
+  try {
+    const devices = await browser.runtime.sendMessage({
+      type: 'discoverDevices',
+      androidUrl: androidUrl,
+      mode: 'android'
+    });
+    
+    androidLoadingEl.style.display = 'none';
+    
+    if (!devices || devices.length === 0 || (devices.error && !devices[0])) {
+      const errorMsg = devices?.error || 'No devices found';
+      setStatus(errorMsg, 'error');
+      showErrorHint(errorMsg);
+      return;
+    }
+    
+    if (devices.error) {
+      setStatus(devices.error, 'error');
+      showErrorHint(devices.error);
+      return;
+    }
+    
+    setStatus(`Found ${devices.length} device${devices.length > 1 ? 's' : ''}`, 'success');
+    hideErrorHint();
+    androidDevicesSectionEl.style.display = 'block';
+    
+    devices.forEach(device => addDevice(device, androidDevicesListEl));
+    
+    if (devices.length === 1) {
+      selectDevice(devices[0]);
+    }
+    
+    updateCastingIndicator();
+  } catch (error) {
+    androidLoadingEl.style.display = 'none';
+    const errorMsg = 'Connection failed: ' + error.message;
+    setStatus(errorMsg, 'error');
+    showErrorHint(errorMsg);
+  } finally {
+    isScanning = false;
+    if (androidRefreshBtnEl) {
+      androidRefreshBtnEl.classList.remove('spinning');
+    }
+  }
+}
+
+function showErrorHint(message) {
+  if (!androidErrorHintEl) return;
+  
+  let hint = '';
+  if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+    hint = 'Check if the app is running and URL is correct';
+  } else if (message.includes('404') || message.includes('Not Found')) {
+    hint = 'Invalid URL. Make sure you copied the full address.';
+  } else if (message.includes('CORS')) {
+    hint = 'Server may not allow connections from browser';
+  }
+  
+  if (hint) {
+    androidErrorHintEl.textContent = hint;
+    androidErrorHintEl.style.display = 'block';
+  }
+}
+
+function hideErrorHint() {
+  if (androidErrorHintEl) {
+    androidErrorHintEl.style.display = 'none';
   }
 }
 
@@ -116,6 +259,47 @@ function selectDevice(device) {
   if (card) card.classList.add('selected');
 }
 
+async function checkDeviceStatus() {
+  if (!selectedDevice) return null;
+  
+  try {
+    const status = await browser.runtime.sendMessage({
+      type: 'getDeviceStatus',
+      mode: currentMode,
+      helperUrl: helperUrl,
+      androidUrl: androidUrl
+    });
+    
+    if (status && status.error) {
+      return null;
+    }
+    
+    return status;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function updateCastingIndicator() {
+  const status = await checkDeviceStatus();
+  
+  document.querySelectorAll('.device-card').forEach(card => {
+    card.classList.remove('device-casting');
+  });
+  
+  if (status && status.casting && status.device) {
+    const castingCard = document.querySelector(`.device-card[data-address="${status.device}"]`);
+    if (castingCard) {
+      castingCard.classList.add('device-casting');
+    }
+    
+    const selectedCard = document.querySelector(`.device-card[data-address="${selectedDevice?.address}"]`);
+    if (selectedCard && !selectedCard.classList.contains('device-casting')) {
+      selectedCard.classList.add('device-casting');
+    }
+  }
+}
+
 async function castToChromecast(videoUrl) {
   if (!selectedDevice) {
     setStatus('Select a device first', 'error');
@@ -129,11 +313,31 @@ async function castToChromecast(videoUrl) {
       type: 'castVideo',
       videoUrl: videoUrl,
       device: selectedDevice,
-      helperUrl
+      helperUrl: helperUrl,
+      androidUrl: androidUrl,
+      mode: currentMode
     });
     setStatus('Casting started!', 'success');
+    updateCastingIndicator();
   } catch (error) {
     setStatus('Cast failed: ' + error.message, 'error');
+  }
+}
+
+async function stopCasting() {
+  setStatus('Stopping...', 'searching');
+  
+  try {
+    await browser.runtime.sendMessage({
+      type: 'stopCast',
+      mode: currentMode,
+      helperUrl: helperUrl,
+      androidUrl: androidUrl
+    });
+    setStatus('Stopped', 'success');
+    updateCastingIndicator();
+  } catch (error) {
+    setStatus('Stop failed: ' + error.message, 'error');
   }
 }
 
@@ -148,12 +352,15 @@ function setMode(mode) {
   
   if (mode === 'standalone') {
     setStatus('Ready to scan');
-    scanForChromecasts();
+    if (!isScanning) {
+      scanForChromecasts();
+    }
   } else {
-    if (helperUrl) {
-      setStatus('Connected: ' + helperUrl);
+    if (androidConnected) {
+      setStatus('Connected to app');
+      androidDevicesSectionEl.style.display = 'block';
     } else {
-      setStatus('Enter helper URL');
+      setStatus('Enter app URL to connect');
     }
   }
 }
@@ -162,31 +369,62 @@ document.getElementById('modeStandalone').onclick = () => setMode('standalone');
 document.getElementById('modeAndroid').onclick = () => setMode('android');
 document.getElementById('scanBtn').onclick = scanForChromecasts;
 
-document.getElementById('connectHelperBtn').onclick = async () => {
-  const input = document.getElementById('helperUrl');
-  helperUrl = input?.value?.trim() || '';
-  localStorage.setItem('helperUrl', helperUrl);
+document.getElementById('connectAndroidBtn').onclick = async () => {
+  const input = document.getElementById('androidUrl');
+  androidUrl = input?.value?.trim() || '';
+  localStorage.setItem('androidUrl', androidUrl);
   
-  if (!helperUrl) {
-    setStatus('Please enter a URL', 'error');
+  if (!androidUrl) {
+    setStatus('Please enter app URL', 'error');
+    setAndroidConnectionState('disconnected', 'Not connected');
     return;
   }
   
-  setStatus('Testing connection...', 'searching');
+  setAndroidConnectionState('testing', 'Testing connection...');
+  hideErrorHint();
   
   try {
-    const result = await browser.runtime.sendMessage({ type: 'testHelper', helperUrl });
+    const result = await browser.runtime.sendMessage({ 
+      type: 'testServer', 
+      url: androidUrl,
+      mode: 'android'
+    });
+    
     if (result && result.ok) {
-      setStatus('Connected: ' + helperUrl, 'success');
+      setAndroidConnectionState('connected', 'Connected');
+      setStatus('Connected to Android app', 'success');
+      hideErrorHint();
+      
+      androidDevicesSectionEl.style.display = 'block';
+      setTimeout(() => scanAndroidDevices(), 300);
     } else {
-      setStatus('Connection failed', 'error');
+      const errorMsg = result?.error || 'Connection failed';
+      setAndroidConnectionState('disconnected', 'Connection failed');
+      setStatus(errorMsg, 'error');
+      showErrorHint(errorMsg);
     }
   } catch (error) {
-    setStatus('Connection failed: ' + error.message, 'error');
+    const errorMsg = 'Connection failed: ' + error.message;
+    setAndroidConnectionState('disconnected', 'Connection failed');
+    setStatus(errorMsg, 'error');
+    showErrorHint(errorMsg);
   }
 };
 
-const helperUrlInput = document.getElementById('helperUrl');
-if (helperUrlInput) helperUrlInput.value = helperUrl;
+if (androidRefreshBtnEl) {
+  androidRefreshBtnEl.onclick = scanAndroidDevices;
+}
+
+const androidUrlInput = document.getElementById('androidUrl');
+if (androidUrlInput) androidUrlInput.value = androidUrl;
+
+function initializeAndroidState() {
+  if (androidConnected && androidUrl) {
+    setAndroidConnectionState('connected', 'Connected');
+  } else {
+    setAndroidConnectionState('disconnected', 'Not connected');
+  }
+}
 
 setMode(currentMode);
+initializeAndroidState();
