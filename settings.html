@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Chromecast Ultimate Settings</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { 
+      width: 100%; 
+      min-height: 100vh;
+      margin: 0; 
+      padding: 0;
+    }
+    body { 
+      font-family: 'Segoe UI', Arial, sans-serif; 
+      width: 100%; 
+      padding: 0; 
+      background: linear-gradient(180deg, #0f0c29 0%, #302b63 50%, #24243e 100%); 
+      color: white; 
+      min-height: 100vh;
+    }
+    
+    .header { padding: 20px 16px; text-align: center; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%); position: relative; overflow: hidden; }
+    .header::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%); }
+    .header h1 { margin: 0; font-size: 20px; font-weight: 700; position: relative; }
+    
+    .content { padding: 20px 16px; }
+    
+    .section { 
+      background: rgba(255,255,255,0.08); 
+      border-radius: 16px; 
+      padding: 20px; 
+      margin-bottom: 16px;
+    }
+    .section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #4285f4; }
+    .section-desc { font-size: 12px; color: #888; margin-bottom: 16px; line-height: 1.5; }
+    
+    .input-field { 
+      width: 100%; 
+      padding: 14px 16px; 
+      border-radius: 12px; 
+      border: 1px solid rgba(255,255,255,0.2); 
+      background: rgba(0,0,0,0.3); 
+      color: white; 
+      font-size: 16px; 
+      margin-bottom: 12px; 
+    }
+    .input-field::placeholder { color: #666; }
+    .input-field:focus { outline: none; border-color: #4285f4; }
+    
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-label { font-size: 14px; }
+    .toggle-desc { font-size: 11px; color: #888; margin-top: 4px; }
+    
+    .toggle {
+      position: relative;
+      width: 50px;
+      height: 28px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .toggle.active { background: #34a853; }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 24px;
+      height: 24px;
+      background: white;
+      border-radius: 50%;
+      transition: all 0.3s;
+    }
+    .toggle.active::after { transform: translateX(22px); }
+    
+    .btn-save {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #4285f4, #34a853);
+      border: none;
+      border-radius: 14px;
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    .btn-save:active { transform: scale(0.98); }
+    
+    .btn-reset {
+      width: 100%;
+      padding: 12px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      color: #888;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+    .btn-reset:active { background: rgba(255,255,255,0.1); }
+    
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #34a853;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 1000;
+    }
+    .toast.show { opacity: 1; }
+    
+    .version { text-align: center; font-size: 11px; color: #555; margin-top: 20px; }
+    
+    @media (max-width: 400px) {
+      .header { padding: 16px 12px; }
+      .header h1 { font-size: 18px; }
+      .content { padding: 16px 12px; }
+      .section { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Settings</h1>
+  </div>
+  
+  <div class="content">
+    <div class="section">
+      <div class="section-title">Connection Mode</div>
+      <div class="section-desc">Choose how the extension connects to cast devices</div>
+      
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Use Android App Bridge</div>
+          <div class="toggle-desc">Connect via ChromecastUltimate Android app (for Android Firefox)</div>
+        </div>
+        <div id="androidModeToggle" class="toggle"></div>
+      </div>
+    </div>
+    
+    <div class="section" id="androidSettings" style="display: none;">
+      <div class="section-title">Android App Settings</div>
+      <div class="section-desc">Enter the URL shown in the ChromecastUltimate Android app</div>
+      
+      <input type="text" id="androidUrlInput" class="input-field" placeholder="http://192.168.1.100:5000">
+      <p style="font-size: 11px; color: #666; margin: 0;">
+        Get this URL from the ChromecastUltimate app's server status screen
+      </p>
+    </div>
+    
+    <div class="section">
+      <div class="section-title">Helper URL</div>
+      <div class="section-desc">URL for the desktop helper application (standalone mode)</div>
+      
+      <input type="text" id="helperUrlInput" class="input-field" placeholder="http://localhost:4269">
+    </div>
+    
+    <div class="section">
+      <div class="section-title">Auto-Scan</div>
+      
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Scan on Open</div>
+          <div class="toggle-desc">Automatically scan for devices when popup opens</div>
+        </div>
+        <div id="autoScanToggle" class="toggle active"></div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <div class="section-title">Discovery</div>
+      
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Show Cast Button</div>
+          <div class="toggle-desc">Show floating cast button on video pages</div>
+        </div>
+        <div id="showCastButtonToggle" class="toggle active"></div>
+      </div>
+    </div>
+    
+    <button id="saveBtn" class="btn-save">Save Settings</button>
+    <button id="resetBtn" class="btn-reset">Reset to Defaults</button>
+    
+    <div class="version">Chromecast Ultimate v5.6.0</div>
+  </div>
+  
+  <div id="toast" class="toast">Settings saved!</div>
+  
+  <script src="settings.js"></script>
+</body>
+</html>

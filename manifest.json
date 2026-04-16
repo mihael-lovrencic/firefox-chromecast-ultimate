@@ -1,12 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Chromecast Ultimate",
-  "version": "5.5.0",
+  "version": "5.6.0",
   "description": "Cast videos and mirror tabs to Chromecast devices directly from Firefox",
   "permissions": ["activeTab", "tabs", "scripting", "storage", "nativeMessaging", "cookies", "webRequest"],
+  "options_ui": {
+    "page": "settings.html",
+    "open_in_tab": true
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_icon": "icons/icon.svg"
+    "default_icon": "icons/icon.svg",
+    "default_title": "Chromecast Ultimate"
   },
   "icons": {
     "48": "icons/icon.svg",

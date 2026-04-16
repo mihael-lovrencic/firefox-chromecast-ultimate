@@ -350,15 +350,20 @@ function setMode(mode) {
   document.getElementById('standaloneSection').style.display = mode === 'standalone' ? 'block' : 'none';
   document.getElementById('androidSection').classList.toggle('active', mode === 'android');
   
+  const autoScan = localStorage.getItem('autoScan') !== 'false';
+  
   if (mode === 'standalone') {
     setStatus('Ready to scan');
-    if (!isScanning) {
+    if (autoScan && !isScanning) {
       scanForChromecasts();
     }
   } else {
     if (androidConnected) {
       setStatus('Connected to app');
       androidDevicesSectionEl.style.display = 'block';
+      if (autoScan && !isScanning) {
+        scanAndroidDevices();
+      }
     } else {
       setStatus('Enter app URL to connect');
     }
