@@ -1,6 +1,6 @@
 let currentMode = localStorage.getItem('castMode') || 'standalone';
 let selectedDevice = null;
-let serverUrl = localStorage.getItem('serverUrl') || '';
+let helperUrl = localStorage.getItem('helperUrl') || '';
 
 const statusTextEl = document.getElementById('statusText');
 const statusDotEl = document.getElementById('statusDot');
@@ -81,7 +81,7 @@ async function scanForChromecasts() {
   clearDevices();
   
   try {
-    const devices = await browser.runtime.sendMessage({ type: 'discoverDevices' });
+    const devices = await browser.runtime.sendMessage({ type: 'discoverDevices', helperUrl });
     showLoading(false);
     
     if (!devices || devices.length === 0) {
@@ -128,7 +128,8 @@ async function castToChromecast(videoUrl) {
     await browser.runtime.sendMessage({
       type: 'castVideo',
       videoUrl: videoUrl,
-      device: selectedDevice
+      device: selectedDevice,
+      helperUrl
     });
     setStatus('Casting started!', 'success');
   } catch (error) {
@@ -149,7 +150,11 @@ function setMode(mode) {
     setStatus('Ready to scan');
     scanForChromecasts();
   } else {
-    setStatus('Enter server URL');
+    if (helperUrl) {
+      setStatus('Connected: ' + helperUrl);
+    } else {
+      setStatus('Enter helper URL');
+    }
   }
 }
 
@@ -157,14 +162,31 @@ document.getElementById('modeStandalone').onclick = () => setMode('standalone');
 document.getElementById('modeAndroid').onclick = () => setMode('android');
 document.getElementById('scanBtn').onclick = scanForChromecasts;
 
-document.getElementById('connectBtn').onclick = () => {
-  const input = document.getElementById('serverUrl');
-  serverUrl = input?.value || '';
-  localStorage.setItem('serverUrl', serverUrl);
-  setStatus('Connected to: ' + serverUrl, 'success');
+document.getElementById('connectHelperBtn').onclick = async () => {
+  const input = document.getElementById('helperUrl');
+  helperUrl = input?.value?.trim() || '';
+  localStorage.setItem('helperUrl', helperUrl);
+  
+  if (!helperUrl) {
+    setStatus('Please enter a URL', 'error');
+    return;
+  }
+  
+  setStatus('Testing connection...', 'searching');
+  
+  try {
+    const result = await browser.runtime.sendMessage({ type: 'testHelper', helperUrl });
+    if (result && result.ok) {
+      setStatus('Connected: ' + helperUrl, 'success');
+    } else {
+      setStatus('Connection failed', 'error');
+    }
+  } catch (error) {
+    setStatus('Connection failed: ' + error.message, 'error');
+  }
 };
 
-const serverUrlInput = document.getElementById('serverUrl');
-if (serverUrlInput) serverUrlInput.value = serverUrl;
+const helperUrlInput = document.getElementById('helperUrl');
+if (helperUrlInput) helperUrlInput.value = helperUrl;
 
 setMode(currentMode);

@@ -61,8 +61,14 @@ async function helperRequest(path, options = {}) {
     return res.json();
   };
 
+  const urlsToTry = HELPER_URLS.slice();
+  
+  if (options.helperUrl) {
+    urlsToTry.unshift(options.helperUrl);
+  }
+  
   let lastError;
-  for (const base of HELPER_URLS) {
+  for (const base of urlsToTry) {
     try {
       return await request(base);
     } catch (e) {
@@ -81,8 +87,9 @@ async function helperRequest(path, options = {}) {
   throw lastError || new Error('Helper not reachable');
 }
 
-async function isHelperReachable() {
-  for (const base of HELPER_URLS) {
+async function isHelperReachable(helperUrl = null) {
+  const urls = helperUrl ? [helperUrl] : HELPER_URLS;
+  for (const base of urls) {
     try {
       const res = await fetch(`${base}/status`);
       if (res.ok) return true;
@@ -191,9 +198,30 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'testHelper') {
+    (async () => {
+      try {
+        const url = message.helperUrl;
+        if (!url) {
+          sendResponse({ ok: false, error: 'No URL provided' });
+          return;
+        }
+        const res = await fetch(`${url}/status`);
+        if (res.ok) {
+          sendResponse({ ok: true });
+        } else {
+          sendResponse({ ok: false, error: 'HTTP ' + res.status });
+        }
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
   if (message.type === 'discoverDevices') {
     ensureHelperRunning()
-      .then(() => helperRequest('/devices'))
+      .then(() => helperRequest('/devices', { helperUrl: message.helperUrl }))
       .then(devices => sendResponse(devices))
       .catch(e => sendResponse({ error: e.message }));
     return true;
@@ -225,7 +253,8 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         };
         await helperRequest('/cast', {
           method: 'POST',
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          helperUrl: message.helperUrl
         });
         if (device) lastDevice = device;
         sendResponse({ success: true });
@@ -247,7 +276,8 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         };
         await helperRequest('/control', {
           method: 'POST',
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          helperUrl: message.helperUrl
         });
         sendResponse({ success: true });
       } catch (e) {
@@ -263,7 +293,8 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await ensureHelperRunning();
         await helperRequest('/stop', {
           method: 'POST',
-          body: JSON.stringify({ device: lastDevice })
+          body: JSON.stringify({ device: lastDevice }),
+          helperUrl: message.helperUrl
         });
         sendResponse({ success: true });
       } catch (e) {
